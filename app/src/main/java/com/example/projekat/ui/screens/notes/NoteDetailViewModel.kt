@@ -18,7 +18,7 @@ data class NoteDetailUiState(
     val id: String? = null,
     val title: String = "",
     val content: String = "",
-    val imageUri: String? = null,
+    val imageUris: List<String> = emptyList(),
     val colorIndex: Int = 0,
     val isBookmarked: Boolean = false,
     val isNew: Boolean = true,
@@ -61,7 +61,7 @@ class NoteDetailViewModel @Inject constructor(
                     id = note.id,
                     title = note.title,
                     content = note.content,
-                    imageUri = note.imageUri,
+                    imageUris = note.imageUris,
                     colorIndex = note.colorIndex,
                     isBookmarked = note.isBookmarked,
                     isNew = false,
@@ -88,8 +88,17 @@ class NoteDetailViewModel @Inject constructor(
         scheduleAutoSave()
     }
 
-    fun updateImageUri(uri: String?) {
-        _uiState.value = _uiState.value.copy(imageUri = uri)
+    fun addImageUri(uri: String) {
+        _uiState.value = _uiState.value.copy(
+            imageUris = _uiState.value.imageUris + uri
+        )
+        scheduleAutoSave()
+    }
+
+    fun removeImageUri(uri: String) {
+        _uiState.value = _uiState.value.copy(
+            imageUris = _uiState.value.imageUris - uri
+        )
         scheduleAutoSave()
     }
 
@@ -130,7 +139,7 @@ class NoteDetailViewModel @Inject constructor(
             val note = Note(
                 title = state.title,
                 content = state.content,
-                imageUri = state.imageUri,
+                imageUris = state.imageUris,
                 colorIndex = state.colorIndex,
                 isBookmarked = state.isBookmarked,
                 createdAt = now,
@@ -145,7 +154,7 @@ class NoteDetailViewModel @Inject constructor(
                 existingNote.copy(
                     title = state.title,
                     content = state.content,
-                    imageUri = state.imageUri,
+                    imageUris = state.imageUris,
                     colorIndex = state.colorIndex,
                     isBookmarked = state.isBookmarked
                 )

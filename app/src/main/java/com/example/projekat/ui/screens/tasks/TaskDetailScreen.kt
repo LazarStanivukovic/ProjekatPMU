@@ -468,11 +468,11 @@ private fun AttachedNotePreview(
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Column {
-            // Image thumbnail if note has an image
-            if (!note.imageUri.isNullOrBlank()) {
+            // Image thumbnail if note has images
+            if (note.imageUris.isNotEmpty()) {
                 AsyncImage(
                     model = ImageRequest.Builder(context)
-                        .data(Uri.parse(note.imageUri))
+                        .data(Uri.parse(note.imageUris[0]))
                         .crossfade(true)
                         .build(),
                     contentDescription = "Slika beleske",

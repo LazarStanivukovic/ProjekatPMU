@@ -12,6 +12,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -158,7 +159,7 @@ fun NoteDetailScreen(
         contract = ActivityResultContracts.TakePicture()
     ) { success ->
         if (success && cameraImageUri != null) {
-            viewModel.updateImageUri(cameraImageUri.toString())
+            viewModel.addImageUri(cameraImageUri.toString())
         }
     }
 
@@ -182,10 +183,10 @@ fun NoteDetailScreen(
             // Copy to app storage so the URI stays valid
             val stableUri = copyImageToAppStorage(context, uri)
             if (stableUri != null) {
-                viewModel.updateImageUri(stableUri.toString())
+                viewModel.addImageUri(stableUri.toString())
             } else {
                 // Fallback: use the original URI (may lose access later)
-                viewModel.updateImageUri(uri.toString())
+                viewModel.addImageUri(uri.toString())
             }
         }
     }
@@ -289,43 +290,95 @@ fun NoteDetailScreen(
                     )
                 )
 
-                // Image preview (if an image is attached)
-                if (uiState.imageUri != null) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 8.dp)
-                    ) {
-                        AsyncImage(
-                            model = ImageRequest.Builder(context)
-                                .data(Uri.parse(uiState.imageUri))
-                                .crossfade(true)
-                                .build(),
-                            contentDescription = "Slika beleske",
-                            contentScale = ContentScale.FillWidth,
+                // Image gallery (horizontally scrollable, Google Keep style)
+                if (uiState.imageUris.isNotEmpty()) {
+                    if (uiState.imageUris.size == 1) {
+                        // Single image — show full-width like before
+                        val imageUri = uiState.imageUris[0]
+                        Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
-                        )
-
-                        // Remove-image button (top-end corner)
-                        IconButton(
-                            onClick = { viewModel.updateImageUri(null) },
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .padding(4.dp)
-                                .size(32.dp)
-                                .background(
-                                    Color.Black.copy(alpha = 0.5f),
-                                    CircleShape
-                                )
+                                .padding(horizontal = 16.dp, vertical = 8.dp)
                         ) {
-                            Icon(
-                                Icons.Default.Close,
-                                contentDescription = "Ukloni sliku",
-                                tint = Color.White,
-                                modifier = Modifier.size(18.dp)
+                            AsyncImage(
+                                model = ImageRequest.Builder(context)
+                                    .data(Uri.parse(imageUri))
+                                    .crossfade(true)
+                                    .build(),
+                                contentDescription = "Slika beleske",
+                                contentScale = ContentScale.FillWidth,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
                             )
+
+                            // Remove-image button (top-end corner)
+                            IconButton(
+                                onClick = { viewModel.removeImageUri(imageUri) },
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(4.dp)
+                                    .size(32.dp)
+                                    .background(
+                                        Color.Black.copy(alpha = 0.5f),
+                                        CircleShape
+                                    )
+                            ) {
+                                Icon(
+                                    Icons.Default.Close,
+                                    contentDescription = "Ukloni sliku",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                    } else {
+                        // Multiple images — horizontal scrollable row
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState())
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            uiState.imageUris.forEach { imageUri ->
+                                Box(
+                                    modifier = Modifier
+                                        .size(180.dp)
+                                ) {
+                                    AsyncImage(
+                                        model = ImageRequest.Builder(context)
+                                            .data(Uri.parse(imageUri))
+                                            .crossfade(true)
+                                            .build(),
+                                        contentDescription = "Slika beleske",
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .clip(RoundedCornerShape(12.dp))
+                                    )
+
+                                    // Remove-image button
+                                    IconButton(
+                                        onClick = { viewModel.removeImageUri(imageUri) },
+                                        modifier = Modifier
+                                            .align(Alignment.TopEnd)
+                                            .padding(4.dp)
+                                            .size(28.dp)
+                                            .background(
+                                                Color.Black.copy(alpha = 0.5f),
+                                                CircleShape
+                                            )
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Close,
+                                            contentDescription = "Ukloni sliku",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }

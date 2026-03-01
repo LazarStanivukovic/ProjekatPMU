@@ -10,7 +10,7 @@ data class Note(
     val id: String = UUID.randomUUID().toString(),
     val title: String = "",
     val content: String = "",
-    val imageUri: String? = null,
+    val imageUris: List<String> = emptyList(),
     val colorIndex: Int = 0,
     val isBookmarked: Boolean = false,
     val isDeleted: Boolean = false,

@@ -3,12 +3,29 @@ package com.example.projekat.data.local
 import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.projekat.data.model.Note
 import com.example.projekat.data.model.Task
 
+val MIGRATION_1_2 = object : Migration(1, 2) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        // Add new column imageUris (JSON string, default empty array)
+        db.execSQL("ALTER TABLE notes ADD COLUMN imageUris TEXT NOT NULL DEFAULT '[]'")
+        // Migrate existing imageUri data into imageUris as a JSON array
+        db.execSQL("""
+            UPDATE notes SET imageUris = '[\"' || imageUri || '\"]'
+            WHERE imageUri IS NOT NULL AND imageUri != ''
+        """)
+        // We cannot drop the old column in SQLite easily, but Room will ignore it
+        // since it's no longer in the entity. It will be cleaned up on next
+        // destructive migration or can be left as-is (harmless).
+    }
+}
+
 @Database(
     entities = [Note::class, Task::class],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 @TypeConverters(Converters::class)

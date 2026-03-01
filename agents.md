@@ -39,7 +39,7 @@ Android app (Jetpack Compose, Kotlin) for managing notes and tasks. Features:
 ### Completed:
 1. **Dependencies added** to `libs.versions.toml` and `app/build.gradle.kts`: Navigation Compose (2.8.4), Lifecycle ViewModel Compose (2.8.7), Material Icons Extended (1.7.5)
 2. **Custom theme**: Modern indigo/amber/teal color palette with light+dark schemes, full Typography definitions, status bar color handling
-3. **Data models**: `Note` (id, title, content, imageUri, colorIndex, isBookmarked, isDeleted, deletedAt, timestamps) and `Task` (id, title, description, status enum IN_PROGRESS/COMPLETED, deadline, noteId, timestamps)
+3. **Data models**: `Note` (id, title, content, imageUris, colorIndex, isBookmarked, isDeleted, deletedAt, timestamps) and `Task` (id, title, description, status enum IN_PROGRESS/COMPLETED, deadline, noteId, timestamps)
 4. **Navigation**: `Screen` sealed class with all routes, `AppNavHost` with all composable destinations
 5. **Bottom Navigation Bar**: 3 tabs (Beleske, Taskovi, Kalendar) with filled/outlined icons
 6. **NotesScreen**: Staggered grid of colored note cards, OutlinedTextField search bar, side modal drawer with filters (All/Bookmarked/Deleted), FAB
@@ -56,11 +56,12 @@ Android app (Jetpack Compose, Kotlin) for managing notes and tasks. Features:
 17. **Screens wired to ViewModels**: All screens now use `hiltViewModel()` instead of mock data, with reactive UI via `collectAsState()`
 18. **Date Picker**: TaskDetailScreen now has a working Material 3 DatePickerDialog for setting deadlines
 19. **Note attachment to tasks**: TaskDetailScreen can select from available notes to attach to a task
-20. **Camera/gallery image picking**: Full implementation — camera captures via FileProvider, gallery picks via GetContent, images copied to app cache for stable URIs, Coil AsyncImage for display. Remove-image button (X) overlaid on image. Image thumbnails shown in NoteCard on NotesScreen. Coil 2.6.0 added as dependency.
-21. **Attached note inline preview in TaskDetailScreen**: `AttachedNotePreview` composable showing the note's color, image thumbnail, title, content snippet (3 lines max), and "Otvori belešku >" link. Card is clickable to navigate to the full note. X button to detach.
+20. **Camera/gallery image picking**: Full implementation — camera captures via FileProvider, gallery picks via GetContent, images copied to app cache for stable URIs, Coil AsyncImage for display. Remove-image button (X) overlaid on each image. Image thumbnails shown in NoteCard on NotesScreen. Coil 2.6.0 added as dependency.
+21. **Attached note inline preview in TaskDetailScreen**: `AttachedNotePreview` composable showing the note's color, first image thumbnail, title, content snippet (3 lines max), and "Otvori belešku >" link. Card is clickable to navigate to the full note. X button to detach.
 22. **AppNavHost wired onNoteClick**: Both TaskDetail and TaskCreate routes now pass `onNoteClick` to `TaskDetailScreen`, enabling navigation to attached notes.
 23. **Calendar swipe gesture**: Horizontal swipe on the calendar card changes month (swipe left = next month, swipe right = previous month). Uses `detectHorizontalDragGestures` with a 100px threshold. Includes `AnimatedContent` slide transition matching swipe direction.
 24. **Swipe-back on detail screens**: Reusable `SwipeBackContainer` composable in `ui/components/`. Both `NoteDetailScreen` and `TaskDetailScreen` are wrapped — swipe right from anywhere to go back. Features smooth `Animatable`-driven offset, dark scrim behind sliding content, and 35% screen-width dismiss threshold.
+25. **Multiple images per note (Google Keep style)**: Migrated from single `imageUri: String?` to `imageUris: List<String>`. Room database migrated v1→v2 with `MIGRATION_1_2` that adds `imageUris` column and copies existing single image data. Added `List<String>` TypeConverter using `org.json.JSONArray`. NoteDetailScreen shows single image full-width or multiple images in horizontal scrollable row with individual remove buttons. NoteCard shows first image with "+N" overlay badge when multiple images exist. Camera/gallery now append images instead of replacing. AttachedNotePreview shows first image from the list.
 
 ### Still TODO (next steps):
 - Verify everything builds correctly in Android Studio (user needs to rebuild with Gradle sync)
