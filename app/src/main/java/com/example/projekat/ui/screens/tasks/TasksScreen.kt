@@ -3,6 +3,7 @@ package com.example.projekat.ui.screens.tasks
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,6 +38,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
@@ -44,12 +46,28 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.projekat.data.model.Task
 import com.example.projekat.data.model.TaskStatus
+import com.example.projekat.ui.theme.NoteBlue
+import com.example.projekat.ui.theme.NoteBlueDark
+import com.example.projekat.ui.theme.NoteCardText
+import com.example.projekat.ui.theme.NoteGreen
+import com.example.projekat.ui.theme.NoteGreenDark
+import com.example.projekat.ui.theme.NoteOrange
+import com.example.projekat.ui.theme.NoteOrangeDark
+import com.example.projekat.ui.theme.NotePink
+import com.example.projekat.ui.theme.NotePinkDark
+import com.example.projekat.ui.theme.NotePurple
+import com.example.projekat.ui.theme.NotePurpleDark
+import com.example.projekat.ui.theme.NoteYellow
+import com.example.projekat.ui.theme.NoteYellowDark
 import com.example.projekat.ui.theme.StatusCompleted
 import com.example.projekat.ui.theme.StatusInProgress
 import com.example.projekat.ui.theme.StatusOverdue
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+
+private val taskColorsLight = listOf(NoteYellow, NoteGreen, NoteBlue, NotePink, NoteOrange, NotePurple)
+private val taskColorsDark = listOf(NoteYellowDark, NoteGreenDark, NoteBlueDark, NotePinkDark, NoteOrangeDark, NotePurpleDark)
 
 @Composable
 fun TasksScreen(
@@ -181,6 +199,7 @@ fun TaskCard(
     onClick: () -> Unit,
     onToggleStatus: () -> Unit = {}
 ) {
+    val isDark = isSystemInDarkTheme()
     val dateFormat = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
     val isCompleted = task.status == TaskStatus.COMPLETED
     val isOverdue = task.deadline != null &&
@@ -193,6 +212,12 @@ fun TaskCard(
         else -> StatusInProgress
     }
 
+    // Card background color based on task's colorIndex
+    val bgColors = if (isDark) taskColorsDark else taskColorsLight
+    val cardBg = bgColors.getOrElse(task.colorIndex) { bgColors[0] }
+    val textColor = if (isDark) Color(0xFFE4E4EC) else NoteCardText
+    val subtextColor = if (isDark) Color(0xFFE4E4EC).copy(alpha = 0.7f) else NoteCardText.copy(alpha = 0.7f)
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -200,7 +225,7 @@ fun TaskCard(
             .animateContentSize(),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
+            containerColor = cardBg
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
@@ -236,9 +261,7 @@ fun TaskCard(
                     text = task.title,
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
-                    color = if (isCompleted)
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    else MaterialTheme.colorScheme.onSurface,
+                    color = if (isCompleted) subtextColor else textColor,
                     textDecoration = if (isCompleted) TextDecoration.LineThrough else null,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -249,7 +272,7 @@ fun TaskCard(
                     Text(
                         text = task.description,
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = subtextColor,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )

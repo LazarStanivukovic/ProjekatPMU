@@ -23,9 +23,16 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
     }
 }
 
+val MIGRATION_2_3 = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        // Add colorIndex column to tasks table (default 0 = first color)
+        db.execSQL("ALTER TABLE tasks ADD COLUMN colorIndex INTEGER NOT NULL DEFAULT 0")
+    }
+}
+
 @Database(
     entities = [Note::class, Task::class],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 @TypeConverters(Converters::class)

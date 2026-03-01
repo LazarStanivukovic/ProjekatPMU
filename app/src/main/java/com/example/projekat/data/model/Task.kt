@@ -18,6 +18,7 @@ data class Task(
     val status: TaskStatus = TaskStatus.IN_PROGRESS,
     val deadline: Long? = null,
     val noteId: String? = null,
+    val colorIndex: Int = 0,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )

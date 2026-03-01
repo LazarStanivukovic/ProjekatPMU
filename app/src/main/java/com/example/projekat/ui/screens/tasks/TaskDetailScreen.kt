@@ -2,7 +2,10 @@ package com.example.projekat.ui.screens.tasks
 
 import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
@@ -18,16 +21,19 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.NoteAdd
 import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -90,6 +96,9 @@ import java.util.Locale
 private val noteColorsLight = listOf(NoteYellow, NoteGreen, NoteBlue, NotePink, NoteOrange, NotePurple)
 private val noteColorsDark = listOf(NoteYellowDark, NoteGreenDark, NoteBlueDark, NotePinkDark, NoteOrangeDark, NotePurpleDark)
 
+// Small swatches in the color picker always show the light pastel so they're recognizable
+private val noteColorSwatches = listOf(NoteYellow, NoteGreen, NoteBlue, NotePink, NoteOrange, NotePurple)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TaskDetailScreen(
@@ -104,13 +113,31 @@ fun TaskDetailScreen(
     var showNoteSelector by remember { mutableStateOf(false) }
     val dateFormat = remember { SimpleDateFormat("dd. MMMM yyyy.", Locale.getDefault()) }
 
-    // Theme-aware surface color for the full-screen background
-    val screenBg = if (isDark) Color(0xFF1E1E2A) else Color(0xFFF8F9FD)
-    val titleColor = if (isDark) Color(0xFFE4E4EC) else Color(0xFF1B1B22)
-    val contentColor = if (isDark) Color(0xFFE4E4EC).copy(alpha = 0.85f) else Color(0xFF1B1B22).copy(alpha = 0.8f)
-    val hintColor = if (isDark) Color(0xFFE4E4EC).copy(alpha = 0.4f) else Color(0xFF1B1B22).copy(alpha = 0.35f)
-    val iconTint = if (isDark) Color(0xFFE4E4EC).copy(alpha = 0.7f) else Color(0xFF1B1B22).copy(alpha = 0.6f)
-    val chipBg = if (isDark) Color(0xFF2A2A3A) else Color(0xFFEEEFF5)
+    // Color from the task's colorIndex
+    val bgColors = if (isDark) noteColorsDark else noteColorsLight
+    val screenBg = bgColors.getOrElse(uiState.colorIndex) { bgColors[0] }
+
+    // Text colors that work on both light pastel and dark muted backgrounds
+    val titleColor = if (isDark) Color(0xFFE4E4EC) else NoteCardText
+    val contentColor = if (isDark) Color(0xFFE4E4EC).copy(alpha = 0.85f) else NoteCardText.copy(alpha = 0.8f)
+    val hintColor = if (isDark) Color(0xFFE4E4EC).copy(alpha = 0.4f) else NoteCardText.copy(alpha = 0.35f)
+    val iconTint = if (isDark) Color(0xFFE4E4EC).copy(alpha = 0.7f) else NoteCardText.copy(alpha = 0.6f)
+    val chipBg = if (isDark) Color(0xFF2A2A3A).copy(alpha = 0.6f) else Color.White.copy(alpha = 0.6f)
+
+    // Refresh attached note when the screen becomes visible again
+    // (e.g. after editing/deleting images in the note detail screen)
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                viewModel.refreshAttachedNote()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
 
     // Navigate back after save/delete
     LaunchedEffect(uiState.isSaved) {
@@ -400,40 +427,116 @@ fun TaskDetailScreen(
                 Spacer(modifier = Modifier.height(32.dp))
             }
 
-            // ---- Bottom bar ----
-            HorizontalDivider(
-                color = if (isDark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.08f)
-            )
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(screenBg)
-                    .padding(horizontal = 16.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically
+            // ---- Bottom bar with color picker ----
+            Column(
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Icon(
-                    imageVector = if (uiState.status == TaskStatus.COMPLETED) Icons.Default.CheckCircle
-                    else Icons.Default.RadioButtonUnchecked,
-                    contentDescription = null,
-                    tint = if (uiState.status == TaskStatus.COMPLETED) StatusCompleted else StatusInProgress,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = if (uiState.status == TaskStatus.COMPLETED) "Zavrseno" else "U toku",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = if (uiState.status == TaskStatus.COMPLETED) StatusCompleted else StatusInProgress
+                // Color picker panel (animated slide up)
+                AnimatedVisibility(
+                    visible = uiState.showColorPicker,
+                    enter = slideInVertically(initialOffsetY = { it }),
+                    exit = slideOutVertically(targetOffsetY = { it })
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                if (isDark) Color(0xFF2A2A3A) else Color(0xFFF5F5F5)
+                            )
+                            .padding(horizontal = 20.dp, vertical = 14.dp)
+                    ) {
+                        Text(
+                            text = "Boja",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = iconTint,
+                            modifier = Modifier.padding(bottom = 10.dp)
+                        )
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            noteColorSwatches.forEachIndexed { index, color ->
+                                Box(
+                                    modifier = Modifier
+                                        .size(40.dp)
+                                        .clip(CircleShape)
+                                        .background(color)
+                                        .then(
+                                            if (uiState.colorIndex == index)
+                                                Modifier.border(
+                                                    2.5.dp,
+                                                    if (isDark) Color.White else Color(0xFF3F51B5),
+                                                    CircleShape
+                                                )
+                                            else Modifier.border(
+                                                1.dp,
+                                                Color.Black.copy(alpha = 0.1f),
+                                                CircleShape
+                                            )
+                                        )
+                                        .clickable { viewModel.updateColorIndex(index) },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (uiState.colorIndex == index) {
+                                        Icon(
+                                            Icons.Default.Check,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp),
+                                            tint = NoteCardText
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                HorizontalDivider(
+                    color = if (isDark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.08f)
                 )
 
-                Spacer(modifier = Modifier.weight(1f))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(screenBg)
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = { viewModel.toggleColorPicker() }) {
+                        Icon(
+                            Icons.Default.Palette,
+                            contentDescription = "Izaberi boju",
+                            tint = iconTint,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
 
-                Text(
-                    text = "Izmene se cuvaju automatski",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = iconTint.copy(alpha = 0.6f)
-                )
+                    Spacer(modifier = Modifier.width(4.dp))
 
-                Spacer(modifier = Modifier.width(8.dp))
+                    Icon(
+                        imageVector = if (uiState.status == TaskStatus.COMPLETED) Icons.Default.CheckCircle
+                        else Icons.Default.RadioButtonUnchecked,
+                        contentDescription = null,
+                        tint = if (uiState.status == TaskStatus.COMPLETED) StatusCompleted else StatusInProgress,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = if (uiState.status == TaskStatus.COMPLETED) "Zavrseno" else "U toku",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (uiState.status == TaskStatus.COMPLETED) StatusCompleted else StatusInProgress
+                    )
+
+                    Spacer(modifier = Modifier.weight(1f))
+
+                    Text(
+                        text = "Izmene se cuvaju automatski",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = iconTint.copy(alpha = 0.6f)
+                    )
+
+                    Spacer(modifier = Modifier.width(8.dp))
+                }
             }
         }
     }

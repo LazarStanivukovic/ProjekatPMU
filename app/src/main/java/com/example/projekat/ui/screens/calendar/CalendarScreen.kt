@@ -9,6 +9,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -55,6 +56,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -64,13 +66,28 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.projekat.data.model.Task
 import com.example.projekat.data.model.TaskStatus
+import com.example.projekat.ui.theme.NoteBlue
+import com.example.projekat.ui.theme.NoteBlueDark
+import com.example.projekat.ui.theme.NoteCardText
+import com.example.projekat.ui.theme.NoteGreen
+import com.example.projekat.ui.theme.NoteGreenDark
+import com.example.projekat.ui.theme.NoteOrange
+import com.example.projekat.ui.theme.NoteOrangeDark
+import com.example.projekat.ui.theme.NotePink
+import com.example.projekat.ui.theme.NotePinkDark
+import com.example.projekat.ui.theme.NotePurple
+import com.example.projekat.ui.theme.NotePurpleDark
+import com.example.projekat.ui.theme.NoteYellow
+import com.example.projekat.ui.theme.NoteYellowDark
 import com.example.projekat.ui.theme.StatusCompleted
 import com.example.projekat.ui.theme.StatusInProgress
 import com.example.projekat.ui.theme.StatusOverdue
 import java.text.SimpleDateFormat
 import java.util.Calendar
-import java.util.Date
 import java.util.Locale
+
+private val calTaskColorsLight = listOf(NoteYellow, NoteGreen, NoteBlue, NotePink, NoteOrange, NotePurple)
+private val calTaskColorsDark = listOf(NoteYellowDark, NoteGreenDark, NoteBlueDark, NotePinkDark, NoteOrangeDark, NotePurpleDark)
 
 @Composable
 fun CalendarScreen(
@@ -372,6 +389,7 @@ private fun CalendarTaskCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val isDark = isSystemInDarkTheme()
     var isExpanded by remember { mutableStateOf(false) }
     val isCompleted = task.status == TaskStatus.COMPLETED
     val isOverdue = task.deadline != null &&
@@ -382,7 +400,11 @@ private fun CalendarTaskCard(
         isOverdue -> StatusOverdue
         else -> StatusInProgress
     }
-    val timeFormat = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
+    // Card background color based on task's colorIndex
+    val bgColors = if (isDark) calTaskColorsDark else calTaskColorsLight
+    val cardBg = bgColors.getOrElse(task.colorIndex) { bgColors[0] }
+    val textColor = if (isDark) Color(0xFFE4E4EC) else NoteCardText
+    val subtextColor = if (isDark) Color(0xFFE4E4EC).copy(alpha = 0.7f) else NoteCardText.copy(alpha = 0.7f)
 
     Card(
         modifier = modifier
@@ -391,7 +413,7 @@ private fun CalendarTaskCard(
             .animateContentSize(),
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
+            containerColor = cardBg
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
@@ -413,23 +435,16 @@ private fun CalendarTaskCard(
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Medium,
                     textDecoration = if (isCompleted) TextDecoration.LineThrough else null,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = textColor,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f)
                 )
-                if (task.deadline != null) {
-                    Text(
-                        text = timeFormat.format(Date(task.deadline)),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = statusColor
-                    )
-                }
                 Spacer(modifier = Modifier.width(4.dp))
                 Icon(
                     imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                     contentDescription = if (isExpanded) "Smanji" else "Prosiri",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    tint = subtextColor,
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -441,7 +456,7 @@ private fun CalendarTaskCard(
                         Text(
                             text = task.description,
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = subtextColor,
                             modifier = Modifier.padding(start = 30.dp)
                         )
                         Spacer(modifier = Modifier.height(10.dp))

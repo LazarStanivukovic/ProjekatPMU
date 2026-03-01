@@ -25,6 +25,8 @@ data class TaskDetailUiState(
     val deadline: Long? = null,
     val noteId: String? = null,
     val attachedNote: Note? = null,
+    val colorIndex: Int = 0,
+    val showColorPicker: Boolean = false,
     val isNew: Boolean = true,
     val isLoading: Boolean = false,
     val isSaved: Boolean = false,
@@ -72,6 +74,7 @@ class TaskDetailViewModel @Inject constructor(
                 deadline = task.deadline,
                 noteId = task.noteId,
                 attachedNote = attachedNote,
+                colorIndex = task.colorIndex,
                 isNew = false,
                 isLoading = false
             )
@@ -113,6 +116,27 @@ class TaskDetailViewModel @Inject constructor(
         scheduleAutoSave()
     }
 
+    fun updateColorIndex(index: Int) {
+        _uiState.value = _uiState.value.copy(colorIndex = index)
+        scheduleAutoSave()
+    }
+
+    fun toggleColorPicker() {
+        _uiState.value = _uiState.value.copy(showColorPicker = !_uiState.value.showColorPicker)
+    }
+
+    /**
+     * Re-fetches the attached note from the database so the preview stays
+     * up-to-date after the user edits/deletes images in the note screen.
+     */
+    fun refreshAttachedNote() {
+        val noteId = _uiState.value.noteId ?: return
+        viewModelScope.launch {
+            val freshNote = noteRepository.getNoteById(noteId)
+            _uiState.value = _uiState.value.copy(attachedNote = freshNote)
+        }
+    }
+
     private fun scheduleAutoSave() {
         autoSaveJob?.cancel()
         autoSaveJob = viewModelScope.launch {
@@ -144,6 +168,7 @@ class TaskDetailViewModel @Inject constructor(
                 status = state.status,
                 deadline = state.deadline,
                 noteId = state.noteId,
+                colorIndex = state.colorIndex,
                 createdAt = now,
                 updatedAt = now
             )
@@ -158,7 +183,8 @@ class TaskDetailViewModel @Inject constructor(
                     description = state.description,
                     status = state.status,
                     deadline = state.deadline,
-                    noteId = state.noteId
+                    noteId = state.noteId,
+                    colorIndex = state.colorIndex
                 )
             )
         }
