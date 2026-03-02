@@ -8,6 +8,7 @@ import com.example.projekat.data.model.Task
 import com.example.projekat.data.model.TaskStatus
 import com.example.projekat.data.repository.NoteRepository
 import com.example.projekat.data.repository.TaskRepository
+import com.example.projekat.notification.DeadlineScheduler
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -37,6 +38,7 @@ data class TaskDetailUiState(
 class TaskDetailViewModel @Inject constructor(
     private val taskRepository: TaskRepository,
     private val noteRepository: NoteRepository,
+    private val deadlineScheduler: DeadlineScheduler,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -100,6 +102,20 @@ class TaskDetailViewModel @Inject constructor(
 
     fun updateStatus(status: TaskStatus) {
         _uiState.value = _uiState.value.copy(status = status)
+        // If task is completed, cancel any pending deadline notification
+        if (status == TaskStatus.COMPLETED) {
+            persistedTaskId?.let { deadlineScheduler.cancelDeadlineNotification(it) }
+        } else {
+            // If task is moved back to in-progress and has a deadline, re-schedule
+            val deadline = _uiState.value.deadline
+            if (deadline != null && persistedTaskId != null) {
+                deadlineScheduler.scheduleDeadlineNotification(
+                    persistedTaskId!!,
+                    _uiState.value.title,
+                    deadline
+                )
+            }
+        }
         scheduleAutoSave()
     }
 
@@ -175,6 +191,15 @@ class TaskDetailViewModel @Inject constructor(
             taskRepository.insertTask(task)
             persistedTaskId = task.id
             _uiState.value = state.copy(id = task.id, isNew = false)
+
+            // Schedule notification for new task with deadline
+            if (state.deadline != null && state.status == TaskStatus.IN_PROGRESS) {
+                deadlineScheduler.scheduleDeadlineNotification(
+                    task.id,
+                    state.title,
+                    state.deadline
+                )
+            }
         } else {
             val existingTask = taskRepository.getTaskById(persistedTaskId!!) ?: return
             taskRepository.updateTask(
@@ -187,13 +212,26 @@ class TaskDetailViewModel @Inject constructor(
                     colorIndex = state.colorIndex
                 )
             )
+
+            // Update deadline notification scheduling
+            if (state.deadline != null && state.status == TaskStatus.IN_PROGRESS) {
+                deadlineScheduler.scheduleDeadlineNotification(
+                    persistedTaskId!!,
+                    state.title,
+                    state.deadline
+                )
+            } else {
+                // No deadline or task completed — cancel notification
+                deadlineScheduler.cancelDeadlineNotification(persistedTaskId!!)
+            }
         }
     }
 
     fun deleteTask() {
         viewModelScope.launch {
-            val state = _uiState.value
             autoSaveJob?.cancel()
+            // Cancel any pending notification before deleting
+            persistedTaskId?.let { deadlineScheduler.cancelDeadlineNotification(it) }
             if (persistedTaskId != null) {
                 taskRepository.deleteTaskById(persistedTaskId!!)
             }

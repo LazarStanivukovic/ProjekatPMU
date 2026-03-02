@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.projekat.data.model.Task
 import com.example.projekat.data.model.TaskStatus
 import com.example.projekat.data.repository.TaskRepository
+import com.example.projekat.notification.DeadlineScheduler
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -21,7 +22,8 @@ data class TasksUiState(
 
 @HiltViewModel
 class TasksViewModel @Inject constructor(
-    private val taskRepository: TaskRepository
+    private val taskRepository: TaskRepository,
+    private val deadlineScheduler: DeadlineScheduler
 ) : ViewModel() {
 
     val uiState: StateFlow<TasksUiState> = taskRepository.getAllTasks()
@@ -41,11 +43,27 @@ class TasksViewModel @Inject constructor(
     fun toggleTaskStatus(task: Task) {
         viewModelScope.launch {
             taskRepository.toggleTaskStatus(task)
+            // Handle notification scheduling based on new status
+            val newStatus = when (task.status) {
+                TaskStatus.IN_PROGRESS -> TaskStatus.COMPLETED
+                TaskStatus.COMPLETED -> TaskStatus.IN_PROGRESS
+            }
+            if (newStatus == TaskStatus.COMPLETED) {
+                deadlineScheduler.cancelDeadlineNotification(task.id)
+            } else if (task.deadline != null) {
+                // Re-enable notification if task moved back to in-progress
+                deadlineScheduler.scheduleDeadlineNotification(
+                    task.id,
+                    task.title,
+                    task.deadline
+                )
+            }
         }
     }
 
     fun deleteTask(task: Task) {
         viewModelScope.launch {
+            deadlineScheduler.cancelDeadlineNotification(task.id)
             taskRepository.deleteTask(task)
         }
     }

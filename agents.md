@@ -33,6 +33,7 @@ Android app (Jetpack Compose, Kotlin) for managing notes and tasks. Features:
 - Fix: Removed inner `Scaffold` from both detail screens (`NoteDetailScreen`, `TaskDetailScreen`) which also had double padding from the outer `Scaffold`'s `innerPadding` in `MainActivity`
 - Cannot run Gradle builds in this environment (no Android SDK) — user must build in Android Studio
 - **Dark theme note colors:** Light pastel note colors (`NoteYellow`, `NoteBlue`, etc.) looked washed out in dark mode with light text on light backgrounds. Added dark muted variants (`NoteYellowDark`, `NoteBlueDark`, etc.) and theme-aware color selection in both `NoteCard` and `NoteDetailScreen`
+- **Deadline notification timing fix:** `DatePicker` returns `selectedDateMillis` as midnight UTC (e.g. `2026-03-02T00:00:00Z`). Scheduling notifications directly at this timestamp caused them to fire at ~1:00 AM CET / ~2:00 AM CEST instead of a sensible time. Fixed by converting UTC midnight to local-time 9:00 AM via `Calendar` API in `DeadlineScheduler.toLocal9AM()`. Both reminder (day before) and deadline-day notifications now fire at 9:00 AM local time. Updated notification text from "Rok istekao" to "Danas ističe rok za..." since notifications now fire in the morning, not after expiry.
 
 ## Accomplished
 
@@ -64,10 +65,10 @@ Android app (Jetpack Compose, Kotlin) for managing notes and tasks. Features:
 25. **Multiple images per note (Google Keep style)**: Migrated from single `imageUri: String?` to `imageUris: List<String>`. Room database migrated v1→v2 with `MIGRATION_1_2` that adds `imageUris` column and copies existing single image data. Added `List<String>` TypeConverter using `org.json.JSONArray`. NoteDetailScreen shows single image full-width or multiple images in horizontal scrollable row with individual remove buttons. NoteCard shows first image with "+N" overlay badge when multiple images exist. Camera/gallery now append images instead of replacing. AttachedNotePreview shows first image from the list.
 26. **Task coloring (matching notes)**: Added `colorIndex` field to Task entity. Room database migrated v2→v3 with `MIGRATION_2_3` that adds `colorIndex` column to tasks table (default 0). TaskDetailScreen now has a color picker in the bottom bar (identical animated slide-up panel as NoteDetailScreen) and full-screen colored background based on selected color. TaskCard in TasksScreen and CalendarTaskCard in CalendarScreen both display the task's color as card background with theme-aware light/dark variants. TaskDetailViewModel updated with `updateColorIndex()` and `toggleColorPicker()` methods.
 27. **Soft-delete with 7-day auto-cleanup (WorkManager)**: Full implementation of background cleanup for soft-deleted notes. Added WorkManager 2.9.1 + Hilt WorkManager integration (`androidx.hilt:hilt-work` 1.2.0) as dependencies. Created `CleanupWorker` (`@HiltWorker` + `CoroutineWorker`) that calls `NoteRepository.cleanupOldDeletedNotes()` to permanently remove notes deleted more than 7 days ago. `ProjekatApplication` now implements `Configuration.Provider` with custom `HiltWorkerFactory`, and schedules a `PeriodicWorkRequest` (every 24 hours, battery-not-low constraint) via `WorkManager.enqueueUniquePeriodicWork`. Disabled default WorkManager initializer in `AndroidManifest.xml`. Also added: NoteDao `deleteAllDeletedNotes()` query, NoteRepository `emptyTrash()` method, NotesViewModel `emptyTrash()` function. UI enhancements: deleted note cards now show "Ostalo X dana" countdown badge (red when <= 1 day), permanent delete button (DeleteForever icon) on each deleted card, and "Isprazni" (empty trash) button next to the title in Deleted view with a confirmation AlertDialog.
+28. **Push notifications for deadline expiry**: Full implementation of deadline notifications using WorkManager. Created `DeadlineWorker` (`@HiltWorker` + `CoroutineWorker`) that verifies task still exists/is in-progress, then fires a high-priority notification with task title. Created `DeadlineScheduler` singleton (Hilt `@Singleton`) that schedules `OneTimeWorkRequest` with `initialDelay` calculated from deadline timestamp, using `enqueueUniqueWork` with `REPLACE` policy per task. Notification channel "Rokovi za taskove" (`IMPORTANCE_HIGH`) created in `ProjekatApplication.onCreate()`. `POST_NOTIFICATIONS` permission added to manifest and requested at runtime in `MainActivity` (Android 13+). `TaskDetailViewModel` schedules notification on save when deadline is set (new or updated tasks), cancels on deadline removal/task completion/task deletion. `TasksViewModel` cancels notification on status toggle to COMPLETED and re-schedules on toggle back to IN_PROGRESS; also cancels on task delete.
 
 ### Still TODO (next steps):
 - Verify everything builds correctly in Android Studio (user needs to rebuild with Gradle sync)
-- Implement notifications for deadline expiry
 
 ## Project Structure
 
@@ -114,8 +115,11 @@ app/src/main/java/com/example/projekat/
         ├── Color.kt                         # Full color palette
         ├── Type.kt                          # Full Typography definitions
         └── Theme.kt                         # Light/dark color schemes, status bar
+├── notification/
+│   └── DeadlineScheduler.kt                 # Hilt @Singleton for scheduling/cancelling deadline notifications
 ├── worker/
-│   └── CleanupWorker.kt                     # @HiltWorker periodic cleanup of soft-deleted notes
+│   ├── CleanupWorker.kt                     # @HiltWorker periodic cleanup of soft-deleted notes
+│   └── DeadlineWorker.kt                    # @HiltWorker fires notification when task deadline expires
 ```
 
 ## Key Config Files
