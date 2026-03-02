@@ -63,17 +63,17 @@ Android app (Jetpack Compose, Kotlin) for managing notes and tasks. Features:
 24. **Swipe-back on detail screens**: Reusable `SwipeBackContainer` composable in `ui/components/`. Both `NoteDetailScreen` and `TaskDetailScreen` are wrapped — swipe right from anywhere to go back. Features smooth `Animatable`-driven offset, dark scrim behind sliding content, and 35% screen-width dismiss threshold.
 25. **Multiple images per note (Google Keep style)**: Migrated from single `imageUri: String?` to `imageUris: List<String>`. Room database migrated v1→v2 with `MIGRATION_1_2` that adds `imageUris` column and copies existing single image data. Added `List<String>` TypeConverter using `org.json.JSONArray`. NoteDetailScreen shows single image full-width or multiple images in horizontal scrollable row with individual remove buttons. NoteCard shows first image with "+N" overlay badge when multiple images exist. Camera/gallery now append images instead of replacing. AttachedNotePreview shows first image from the list.
 26. **Task coloring (matching notes)**: Added `colorIndex` field to Task entity. Room database migrated v2→v3 with `MIGRATION_2_3` that adds `colorIndex` column to tasks table (default 0). TaskDetailScreen now has a color picker in the bottom bar (identical animated slide-up panel as NoteDetailScreen) and full-screen colored background based on selected color. TaskCard in TasksScreen and CalendarTaskCard in CalendarScreen both display the task's color as card background with theme-aware light/dark variants. TaskDetailViewModel updated with `updateColorIndex()` and `toggleColorPicker()` methods.
+27. **Soft-delete with 7-day auto-cleanup (WorkManager)**: Full implementation of background cleanup for soft-deleted notes. Added WorkManager 2.9.1 + Hilt WorkManager integration (`androidx.hilt:hilt-work` 1.2.0) as dependencies. Created `CleanupWorker` (`@HiltWorker` + `CoroutineWorker`) that calls `NoteRepository.cleanupOldDeletedNotes()` to permanently remove notes deleted more than 7 days ago. `ProjekatApplication` now implements `Configuration.Provider` with custom `HiltWorkerFactory`, and schedules a `PeriodicWorkRequest` (every 24 hours, battery-not-low constraint) via `WorkManager.enqueueUniquePeriodicWork`. Disabled default WorkManager initializer in `AndroidManifest.xml`. Also added: NoteDao `deleteAllDeletedNotes()` query, NoteRepository `emptyTrash()` method, NotesViewModel `emptyTrash()` function. UI enhancements: deleted note cards now show "Ostalo X dana" countdown badge (red when <= 1 day), permanent delete button (DeleteForever icon) on each deleted card, and "Isprazni" (empty trash) button next to the title in Deleted view with a confirmation AlertDialog.
 
 ### Still TODO (next steps):
 - Verify everything builds correctly in Android Studio (user needs to rebuild with Gradle sync)
-- Implement soft-delete with 7-day auto-cleanup (logic exists in repository, needs scheduling via WorkManager)
 - Implement notifications for deadline expiry
 
 ## Project Structure
 
 ```
 app/src/main/java/com/example/projekat/
-├── ProjekatApplication.kt                   # @HiltAndroidApp Application class
+├── ProjekatApplication.kt                   # @HiltAndroidApp Application class, WorkManager scheduling
 ├── MainActivity.kt                          # @AndroidEntryPoint, NavController, outer Scaffold, bottom bar
 ├── data/
 │   ├── local/
@@ -114,6 +114,8 @@ app/src/main/java/com/example/projekat/
         ├── Color.kt                         # Full color palette
         ├── Type.kt                          # Full Typography definitions
         └── Theme.kt                         # Light/dark color schemes, status bar
+├── worker/
+│   └── CleanupWorker.kt                     # @HiltWorker periodic cleanup of soft-deleted notes
 ```
 
 ## Key Config Files
@@ -129,6 +131,8 @@ app/src/main/java/com/example/projekat/
 - **Hilt Navigation Compose** 1.2.0 — `hiltViewModel()` in composables
 - **Coroutines** 1.8.1 — Async operations (Flow, suspend functions)
 - **Coil** 2.6.0 — Image loading library for Compose (AsyncImage)
+- **WorkManager** 2.9.1 — Background periodic task scheduling (7-day cleanup)
+- **Hilt Work** 1.2.0 — Hilt integration for WorkManager (`@HiltWorker`, `HiltWorkerFactory`)
 
 ## Screenshots
 - `Screenshot 2026-02-28 211429.png` — Notes screen (showed excessive top padding before fix)

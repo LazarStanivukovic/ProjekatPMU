@@ -86,4 +86,10 @@ class NotesViewModel @Inject constructor(
             noteRepository.permanentlyDeleteNote(note)
         }
     }
+
+    fun emptyTrash() {
+        viewModelScope.launch {
+            noteRepository.emptyTrash()
+        }
+    }
 }

@@ -39,6 +39,9 @@ interface NoteDao {
     @Query("DELETE FROM notes WHERE isDeleted = 1 AND deletedAt < :cutoffTime")
     suspend fun deleteNotesOlderThan(cutoffTime: Long)
 
+    @Query("DELETE FROM notes WHERE isDeleted = 1")
+    suspend fun deleteAllDeletedNotes()
+
     @Query("SELECT * FROM notes WHERE isDeleted = 0 ORDER BY updatedAt DESC")
     suspend fun getAllNotesList(): List<Note>
 }

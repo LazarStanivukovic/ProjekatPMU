@@ -49,6 +49,8 @@ class NoteRepository @Inject constructor(
         noteDao.deleteNotesOlderThan(sevenDaysAgo)
     }
 
+    suspend fun emptyTrash() = noteDao.deleteAllDeletedNotes()
+
     suspend fun toggleBookmark(note: Note) = noteDao.updateNote(
         note.copy(
             isBookmarked = !note.isBookmarked,

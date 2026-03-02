@@ -67,6 +67,11 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     // Coil (image loading)
     implementation(libs.coil.compose)
+    // WorkManager
+    implementation(libs.androidx.work.runtime.ktx)
+    // Hilt WorkManager integration
+    implementation(libs.androidx.hilt.work)
+    ksp(libs.androidx.hilt.compiler)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

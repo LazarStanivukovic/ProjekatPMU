@@ -26,12 +26,16 @@ import androidx.compose.material.icons.automirrored.filled.StickyNote2
 import androidx.compose.material.icons.automirrored.outlined.StickyNote2
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.RestoreFromTrash
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.StickyNote2
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material.icons.outlined.StickyNote2
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DrawerValue
@@ -46,11 +50,15 @@ import androidx.compose.material3.NavigationDrawerItemDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -101,6 +109,7 @@ fun NotesScreen(
     val currentFilter by viewModel.currentFilter.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
     val notes by viewModel.notes.collectAsState()
+    var showEmptyTrashDialog by remember { mutableStateOf(false) }
 
     val drawerTitle = when (currentFilter) {
         NoteFilter.ALL -> "Beleske"
@@ -212,14 +221,40 @@ fun NotesScreen(
                     )
                 }
 
-                // Title
-                Text(
-                    text = drawerTitle,
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onBackground,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
-                )
+                // Title row with optional "empty trash" button
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = drawerTitle,
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                    if (currentFilter == NoteFilter.DELETED && notes.isNotEmpty()) {
+                        TextButton(
+                            onClick = { showEmptyTrashDialog = true },
+                            colors = ButtonDefaults.textButtonColors(
+                                contentColor = MaterialTheme.colorScheme.error
+                            )
+                        ) {
+                            Icon(
+                                Icons.Outlined.DeleteSweep,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "Isprazni",
+                                style = MaterialTheme.typography.labelLarge
+                            )
+                        }
+                    }
+                }
 
                 if (notes.isEmpty()) {
                     // Empty state
@@ -256,7 +291,8 @@ fun NotesScreen(
                                 note = note,
                                 onClick = { onNoteClick(note.id) },
                                 showRestore = currentFilter == NoteFilter.DELETED,
-                                onRestore = { viewModel.restoreNote(note) }
+                                onRestore = { viewModel.restoreNote(note) },
+                                onPermanentDelete = { viewModel.permanentlyDeleteNote(note) }
                             )
                         }
                     }
@@ -277,6 +313,35 @@ fun NotesScreen(
             }
         }
     }
+
+    // Empty trash confirmation dialog
+    if (showEmptyTrashDialog) {
+        AlertDialog(
+            onDismissRequest = { showEmptyTrashDialog = false },
+            title = { Text("Isprazni korpu?") },
+            text = {
+                Text("Sve obrisane beleske ce biti trajno uklonjene. Ova radnja se ne moze ponistiti.")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.emptyTrash()
+                        showEmptyTrashDialog = false
+                    },
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Text("Obrisi sve")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEmptyTrashDialog = false }) {
+                    Text("Otkazi")
+                }
+            }
+        )
+    }
 }
 
 @Composable
@@ -284,7 +349,8 @@ fun NoteCard(
     note: Note,
     onClick: () -> Unit,
     showRestore: Boolean = false,
-    onRestore: () -> Unit = {}
+    onRestore: () -> Unit = {},
+    onPermanentDelete: () -> Unit = {}
 ) {
     val isDark = isSystemInDarkTheme()
     val colors = if (isDark) noteColorsDark else noteColors
@@ -292,6 +358,14 @@ fun NoteCard(
     val textColor = if (isDark) androidx.compose.ui.graphics.Color(0xFFE4E4EC) else NoteCardText
     val dateFormat = SimpleDateFormat("dd MMM", Locale.getDefault())
     val context = LocalContext.current
+
+    // Calculate days remaining before auto-deletion
+    val daysRemaining = if (showRestore && note.deletedAt != null) {
+        val elapsedMs = System.currentTimeMillis() - note.deletedAt!!
+        val remainingMs = 7 * 24 * 60 * 60 * 1000L - elapsedMs
+        val days = (remainingMs / (24 * 60 * 60 * 1000L)).toInt()
+        if (days < 0) 0 else days
+    } else null
 
     Card(
         modifier = Modifier
@@ -394,6 +468,20 @@ fun NoteCard(
 
                 Spacer(modifier = Modifier.height(10.dp))
 
+                if (showRestore && daysRemaining != null) {
+                    // "Days remaining" badge for deleted notes
+                    Text(
+                        text = if (daysRemaining == 0) "Brise se danas"
+                               else if (daysRemaining == 1) "Ostao $daysRemaining dan"
+                               else "Ostalo $daysRemaining dana",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (daysRemaining <= 1) MaterialTheme.colorScheme.error
+                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                }
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -406,16 +494,30 @@ fun NoteCard(
                     )
 
                     if (showRestore) {
-                        IconButton(
-                            onClick = onRestore,
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.RestoreFromTrash,
-                                contentDescription = "Vrati belesku",
-                                modifier = Modifier.size(20.dp),
-                                tint = MaterialTheme.colorScheme.primary
-                            )
+                        Row {
+                            IconButton(
+                                onClick = onPermanentDelete,
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.DeleteForever,
+                                    contentDescription = "Obrisi trajno",
+                                    modifier = Modifier.size(20.dp),
+                                    tint = MaterialTheme.colorScheme.error
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(4.dp))
+                            IconButton(
+                                onClick = onRestore,
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.RestoreFromTrash,
+                                    contentDescription = "Vrati belesku",
+                                    modifier = Modifier.size(20.dp),
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
                         }
                     }
                 }
