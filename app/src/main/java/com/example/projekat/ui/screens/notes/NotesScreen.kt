@@ -359,11 +359,11 @@ fun NoteCard(
     val dateFormat = SimpleDateFormat("dd MMM", Locale.getDefault())
     val context = LocalContext.current
 
-    // Calculate days remaining before auto-deletion
+    // Calculate days remaining before auto-deletion (ceil so "just deleted" shows 7, not 6)
     val daysRemaining = if (showRestore && note.deletedAt != null) {
         val elapsedMs = System.currentTimeMillis() - note.deletedAt!!
         val remainingMs = 7 * 24 * 60 * 60 * 1000L - elapsedMs
-        val days = (remainingMs / (24 * 60 * 60 * 1000L)).toInt()
+        val days = kotlin.math.ceil(remainingMs.toDouble() / (24 * 60 * 60 * 1000L)).toInt()
         if (days < 0) 0 else days
     } else null
 
