@@ -1,6 +1,7 @@
 package com.example.projekat
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -11,7 +12,10 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -25,6 +29,9 @@ import dagger.hilt.android.AndroidEntryPoint
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
+    // Pending taskId from notification tap — consumed by Compose navigation
+    private var pendingTaskId by mutableStateOf<String?>(null)
+
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { /* User granted or denied — nothing extra needed */ }
@@ -33,11 +40,22 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         requestNotificationPermission()
+        handleTaskIdFromIntent(intent)
         setContent {
             ProjekatTheme {
                 val navController = rememberNavController()
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
                 val currentRoute = navBackStackEntry?.destination?.route
+
+                // Navigate to TaskDetail when notification is tapped
+                LaunchedEffect(pendingTaskId) {
+                    pendingTaskId?.let { taskId ->
+                        navController.navigate(Screen.TaskDetail.createRoute(taskId)) {
+                            launchSingleTop = true
+                        }
+                        pendingTaskId = null
+                    }
+                }
 
                 // Show bottom bar only on main screens
                 val showBottomBar = currentRoute in listOf(
@@ -71,6 +89,17 @@ class MainActivity : ComponentActivity() {
                     )
                 }
             }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleTaskIdFromIntent(intent)
+    }
+
+    private fun handleTaskIdFromIntent(intent: Intent?) {
+        intent?.getStringExtra("taskId")?.let { taskId ->
+            pendingTaskId = taskId
         }
     }
 

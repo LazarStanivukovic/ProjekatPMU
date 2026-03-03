@@ -49,9 +49,9 @@ class DeadlineWorker @AssistedInject constructor(
             }
         }
 
-        // Create intent to open the app when notification is tapped
+        // Create intent to open the app and navigate to the task
         val intent = Intent(applicationContext, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
             putExtra("taskId", taskId)
         }
         val pendingIntent = PendingIntent.getActivity(
