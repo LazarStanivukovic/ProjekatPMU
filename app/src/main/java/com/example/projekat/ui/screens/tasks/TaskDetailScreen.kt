@@ -48,6 +48,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.SelectableDates
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -90,6 +91,7 @@ import com.example.projekat.ui.theme.NoteYellowDark
 import com.example.projekat.ui.theme.StatusCompleted
 import com.example.projekat.ui.theme.StatusInProgress
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
@@ -155,8 +157,28 @@ fun TaskDetailScreen(
 
     // Date Picker Dialog
     if (showDatePicker) {
+        // Najraniji datum koji moze da se odabere je sutra (ponoć UTC)
+        val tomorrowMillis = remember {
+            Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC")).apply {
+                timeInMillis = System.currentTimeMillis()
+                add(Calendar.DAY_OF_YEAR, 1)
+                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }.timeInMillis
+        }
         val datePickerState = rememberDatePickerState(
-            initialSelectedDateMillis = uiState.deadline ?: System.currentTimeMillis()
+            initialSelectedDateMillis = uiState.deadline?.takeIf { it >= tomorrowMillis } ?: tomorrowMillis,
+            selectableDates = object : SelectableDates {
+                override fun isSelectableDate(utcTimeMillis: Long): Boolean {
+                    return utcTimeMillis >= tomorrowMillis
+                }
+                override fun isSelectableYear(year: Int): Boolean {
+                    val currentYear = Calendar.getInstance().get(Calendar.YEAR)
+                    return year >= currentYear
+                }
+            }
         )
         DatePickerDialog(
             onDismissRequest = { showDatePicker = false },
