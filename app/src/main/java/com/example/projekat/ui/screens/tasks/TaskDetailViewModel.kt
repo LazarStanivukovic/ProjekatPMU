@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.projekat.data.model.Note
 import com.example.projekat.data.model.Task
+import com.example.projekat.data.model.TaskPriority
 import com.example.projekat.data.model.TaskStatus
 import com.example.projekat.data.repository.NoteRepository
 import com.example.projekat.data.repository.TaskRepository
@@ -23,6 +24,7 @@ data class TaskDetailUiState(
     val title: String = "",
     val description: String = "",
     val status: TaskStatus = TaskStatus.IN_PROGRESS,
+    val priority: TaskPriority = TaskPriority.MEDIUM,
     val deadline: Long? = null,
     val noteId: String? = null,
     val attachedNote: Note? = null,
@@ -73,6 +75,7 @@ class TaskDetailViewModel @Inject constructor(
                 title = task.title,
                 description = task.description,
                 status = task.status,
+                priority = task.priority,
                 deadline = task.deadline,
                 noteId = task.noteId,
                 attachedNote = attachedNote,
@@ -121,6 +124,11 @@ class TaskDetailViewModel @Inject constructor(
 
     fun updateDeadline(deadline: Long?) {
         _uiState.value = _uiState.value.copy(deadline = deadline)
+        scheduleAutoSave()
+    }
+
+    fun updatePriority(priority: TaskPriority) {
+        _uiState.value = _uiState.value.copy(priority = priority)
         scheduleAutoSave()
     }
 
@@ -182,6 +190,7 @@ class TaskDetailViewModel @Inject constructor(
                 title = state.title,
                 description = state.description,
                 status = state.status,
+                priority = state.priority,
                 deadline = state.deadline,
                 noteId = state.noteId,
                 colorIndex = state.colorIndex,
@@ -207,6 +216,7 @@ class TaskDetailViewModel @Inject constructor(
                     title = state.title,
                     description = state.description,
                     status = state.status,
+                    priority = state.priority,
                     deadline = state.deadline,
                     noteId = state.noteId,
                     colorIndex = state.colorIndex

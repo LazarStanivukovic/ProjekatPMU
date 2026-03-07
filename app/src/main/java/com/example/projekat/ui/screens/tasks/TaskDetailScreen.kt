@@ -73,6 +73,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.projekat.data.model.Note
+import com.example.projekat.data.model.TaskPriority
 import com.example.projekat.data.model.TaskStatus
 import com.example.projekat.ui.components.SwipeBackContainer
 import com.example.projekat.ui.theme.NoteBlue
@@ -88,6 +89,9 @@ import com.example.projekat.ui.theme.NotePurple
 import com.example.projekat.ui.theme.NotePurpleDark
 import com.example.projekat.ui.theme.NoteYellow
 import com.example.projekat.ui.theme.NoteYellowDark
+import com.example.projekat.ui.theme.PriorityHigh
+import com.example.projekat.ui.theme.PriorityLow
+import com.example.projekat.ui.theme.PriorityMedium
 import com.example.projekat.ui.theme.StatusCompleted
 import com.example.projekat.ui.theme.StatusInProgress
 import java.text.SimpleDateFormat
@@ -322,6 +326,44 @@ fun TaskDetailScreen(
                         color = StatusCompleted,
                         chipBg = chipBg,
                         onClick = { viewModel.updateStatus(TaskStatus.COMPLETED) }
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // ---- Priority chips ----
+                Text(
+                    text = "Prioritet",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = iconTint,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    PriorityChip(
+                        label = "Visok",
+                        selected = uiState.priority == TaskPriority.HIGH,
+                        color = PriorityHigh,
+                        chipBg = chipBg,
+                        onClick = { viewModel.updatePriority(TaskPriority.HIGH) }
+                    )
+                    PriorityChip(
+                        label = "Srednji",
+                        selected = uiState.priority == TaskPriority.MEDIUM,
+                        color = PriorityMedium,
+                        chipBg = chipBg,
+                        onClick = { viewModel.updatePriority(TaskPriority.MEDIUM) }
+                    )
+                    PriorityChip(
+                        label = "Nizak",
+                        selected = uiState.priority == TaskPriority.LOW,
+                        color = PriorityLow,
+                        chipBg = chipBg,
+                        onClick = { viewModel.updatePriority(TaskPriority.LOW) }
                     )
                 }
 
@@ -712,6 +754,41 @@ private fun StatusChip(
                 contentDescription = null,
                 tint = if (selected) color else color.copy(alpha = 0.5f),
                 modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                color = if (selected) color else color.copy(alpha = 0.7f)
+            )
+        }
+    }
+}
+
+@Composable
+private fun PriorityChip(
+    label: String,
+    selected: Boolean,
+    color: Color,
+    chipBg: Color,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .clickable(onClick = onClick)
+            .background(
+                color = if (selected) color.copy(alpha = 0.15f) else chipBg,
+                shape = RoundedCornerShape(20.dp)
+            )
+            .padding(horizontal = 16.dp, vertical = 10.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(12.dp)
+                    .clip(CircleShape)
+                    .background(if (selected) color else color.copy(alpha = 0.5f))
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(

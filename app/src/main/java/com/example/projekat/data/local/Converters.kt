@@ -1,6 +1,7 @@
 package com.example.projekat.data.local
 
 import androidx.room.TypeConverter
+import com.example.projekat.data.model.TaskPriority
 import com.example.projekat.data.model.TaskStatus
 import org.json.JSONArray
 
@@ -13,6 +14,16 @@ class Converters {
     @TypeConverter
     fun toTaskStatus(value: String): TaskStatus {
         return TaskStatus.valueOf(value)
+    }
+
+    @TypeConverter
+    fun fromTaskPriority(priority: TaskPriority): String {
+        return priority.name
+    }
+
+    @TypeConverter
+    fun toTaskPriority(value: String): TaskPriority {
+        return TaskPriority.valueOf(value)
     }
 
     @TypeConverter

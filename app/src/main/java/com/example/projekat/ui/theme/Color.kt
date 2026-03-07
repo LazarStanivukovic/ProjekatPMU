@@ -60,5 +60,10 @@ val StatusCompleted = Color(0xFF66BB6A)
 val StatusOverdue = Color(0xFFEF5350)
 val BookmarkColor = Color(0xFFFFD54F)
 
+// Priority colors
+val PriorityHigh = Color(0xFFEF5350)
+val PriorityMedium = Color(0xFFFFA726)
+val PriorityLow = Color(0xFF66BB6A)
+
 // Fixed dark text for note cards (pastel backgrounds need dark text in both themes)
 val NoteCardText = Color(0xFF1B1B22)

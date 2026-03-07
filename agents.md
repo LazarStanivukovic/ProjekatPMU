@@ -66,8 +66,16 @@ Android app (Jetpack Compose, Kotlin) for managing notes and tasks. Features:
 26. **Task coloring (matching notes)**: Added `colorIndex` field to Task entity. Room database migrated v2→v3 with `MIGRATION_2_3` that adds `colorIndex` column to tasks table (default 0). TaskDetailScreen now has a color picker in the bottom bar (identical animated slide-up panel as NoteDetailScreen) and full-screen colored background based on selected color. TaskCard in TasksScreen and CalendarTaskCard in CalendarScreen both display the task's color as card background with theme-aware light/dark variants. TaskDetailViewModel updated with `updateColorIndex()` and `toggleColorPicker()` methods.
 27. **Soft-delete with 7-day auto-cleanup (WorkManager)**: Full implementation of background cleanup for soft-deleted notes. Added WorkManager 2.9.1 + Hilt WorkManager integration (`androidx.hilt:hilt-work` 1.2.0) as dependencies. Created `CleanupWorker` (`@HiltWorker` + `CoroutineWorker`) that calls `NoteRepository.cleanupOldDeletedNotes()` to permanently remove notes deleted more than 7 days ago. `ProjekatApplication` now implements `Configuration.Provider` with custom `HiltWorkerFactory`, and schedules a `PeriodicWorkRequest` (every 24 hours, battery-not-low constraint) via `WorkManager.enqueueUniquePeriodicWork`. Disabled default WorkManager initializer in `AndroidManifest.xml`. Also added: NoteDao `deleteAllDeletedNotes()` query, NoteRepository `emptyTrash()` method, NotesViewModel `emptyTrash()` function. UI enhancements: deleted note cards now show "Ostalo X dana" countdown badge (red when <= 1 day), permanent delete button (DeleteForever icon) on each deleted card, and "Isprazni" (empty trash) button next to the title in Deleted view with a confirmation AlertDialog.
 28. **Push notifications for deadline expiry**: Full implementation of deadline notifications using WorkManager. Created `DeadlineWorker` (`@HiltWorker` + `CoroutineWorker`) that verifies task still exists/is in-progress, then fires a high-priority notification with task title. Created `DeadlineScheduler` singleton (Hilt `@Singleton`) that schedules `OneTimeWorkRequest` with `initialDelay` calculated from deadline timestamp, using `enqueueUniqueWork` with `REPLACE` policy per task. Notification channel "Rokovi za taskove" (`IMPORTANCE_HIGH`) created in `ProjekatApplication.onCreate()`. `POST_NOTIFICATIONS` permission added to manifest and requested at runtime in `MainActivity` (Android 13+). `TaskDetailViewModel` schedules notification on save when deadline is set (new or updated tasks), cancels on deadline removal/task completion/task deletion. `TasksViewModel` cancels notification on status toggle to COMPLETED and re-schedules on toggle back to IN_PROGRESS; also cancels on task delete.
+29. **Task priority system**: Added `TaskPriority` enum (`HIGH`, `MEDIUM`, `LOW`) to `Task.kt`. New `priority` field with default `MEDIUM`. Room database migrated v3→v4 with `MIGRATION_3_4` that adds `priority TEXT NOT NULL DEFAULT 'MEDIUM'` column. TypeConverter added for `TaskPriority`. TaskDetailScreen has 3 priority chips (Visok/Srednji/Nizak) with color-coded indicators (red/orange/green). TaskCard on TasksScreen shows priority badge alongside deadline. TaskDetailViewModel updated with `updatePriority()` and priority included in save/load. Priority colors added to Color.kt (`PriorityHigh`, `PriorityMedium`, `PriorityLow`).
+
+30. **Ktor backend server for AI scheduling (FAZA 3)**: Complete Ktor server at `ktorServer/backend/` calling Pollinations.ai (free, no API key). Server runs on port 8080 with endpoints: `GET /` (server info), `GET /api/health` (health check), `POST /api/schedule` (AI scheduling). Receives JSON `{tasks: [{name, priority, deadline}]}`, sends prompt to Pollinations.ai (`POST https://text.pollinations.ai` with model "openai"), parses AI response into `{scheduledTasks: [{name, scheduledDate}]}`. Robust JSON parsing handles: arrays, single objects, objects with nested arrays (scheduledTasks/tasks/schedule keys), markdown code blocks. Fallback returns original deadlines if parsing fails. Missing tasks filled with deadline fallback. CORS enabled for all origins. Kotlinx-serialization for all request/response models. Ktor CIO client with 60s timeout for AI calls. Logback logging. Tested and verified: all 3 test tasks returned with correct priority-based scheduling (HIGH=ASAP, MEDIUM=balanced, LOW=deferred).
+
+31. **Android networking with Retrofit (FAZA 4)**: Added Retrofit 2.11.0, Gson converter, and OkHttp 4.12.0 logging interceptor to version catalog and app dependencies. Created `data/remote/ScheduleDto.kt` with DTOs matching server API (`ScheduleRequestDto`, `TaskItemDto`, `ScheduleResponseDto`, `ScheduledTaskDto`). Created `data/remote/ScheduleApi.kt` Retrofit interface (`POST /api/schedule`, `GET /api/health`). Created `di/NetworkModule.kt` Hilt module providing `OkHttpClient` (90s read timeout), `Retrofit` (base URL `http://10.0.2.2:8080/` for emulator→host), and `ScheduleApi`. Created `data/repository/AiScheduleRepository.kt` converting Task entities to DTOs, calling API, matching results back by name, returning `Result<List<ScheduleResult>>`. Added `INTERNET` permission and `usesCleartextTraffic="true"` to AndroidManifest.
+
+32. **AI scheduling UI integration (FAZA 5)**: Full end-to-end AI scheduling flow in TasksScreen. Added "AI Raspored" button (with AutoAwesome icon) in header — only visible when eligible tasks exist (in-progress + has deadline). Button enters selection mode: header changes to "Izaberi taskove", task cards show checkboxes instead of status circles, ineligible tasks dimmed, selected tasks get primary-color border. Info bar shows selection count + "Rasporedi" button. On press: loading spinner + "Generisanje..." text, calls AiScheduleRepository. Results shown in `SchedulePreviewDialog` — styled AlertDialog with AutoAwesome icon, each task displayed as a card showing original deadline → new AI-scheduled date (with arrow and primary-colored badge). "Primeni" confirms and overwrites task deadlines with AI-suggested dates (also re-schedules push notifications). "Otkazi" dismisses. Errors shown via Snackbar with user-friendly Serbian messages (server unreachable, timeout). FAB hidden during selection mode. TasksViewModel rebuilt with `combine()` flow merging task list with `AiState` (selection, loading, results, dialog).
 
 ### Still TODO (next steps):
+- FAZA 6: Testing and polish
 - Verify everything builds correctly in Android Studio (user needs to rebuild with Gradle sync)
 
 ## Project Structure
@@ -85,11 +93,16 @@ app/src/main/java/com/example/projekat/
 │   ├── model/
 │   │   ├── Note.kt                          # @Entity data class
 │   │   └── Task.kt                          # @Entity data class + TaskStatus enum
+│   ├── remote/
+│   │   ├── ScheduleApi.kt                   # Retrofit interface (POST /api/schedule, GET /api/health)
+│   │   └── ScheduleDto.kt                   # DTOs: ScheduleRequestDto, TaskItemDto, ScheduleResponseDto, ScheduledTaskDto
 │   └── repository/
+│       ├── AiScheduleRepository.kt          # AI scheduling business logic (calls Retrofit, maps results)
 │       ├── NoteRepository.kt                # Business logic for notes
 │       └── TaskRepository.kt                # Business logic for tasks
 ├── di/
-│   └── DatabaseModule.kt                    # Hilt module providing AppDatabase, NoteDao, TaskDao
+│   ├── DatabaseModule.kt                    # Hilt module providing AppDatabase, NoteDao, TaskDao
+│   └── NetworkModule.kt                     # Hilt module providing OkHttpClient, Retrofit, ScheduleApi
 ├── navigation/
 │   ├── Screen.kt                            # Sealed class with all routes
 │   └── AppNavHost.kt                        # NavHost with all composable destinations
@@ -122,6 +135,22 @@ app/src/main/java/com/example/projekat/
 │   └── DeadlineWorker.kt                    # @HiltWorker fires notification when task deadline expires
 ```
 
+## Ktor Server Structure (ktorServer/backend/)
+
+```
+src/main/kotlin/org/example/
+├── Application.kt                           # Ktor main: ContentNegotiation, CORS, StatusPages, routing
+├── models/
+│   └── ScheduleModels.kt                   # @Serializable: TaskScheduleRequest, TaskItem, ScheduleResponse, ScheduledTask, ErrorResponse, HealthResponse, ServerInfo
+├── routes/
+│   └── ScheduleRoutes.kt                   # POST /api/schedule, GET /api/health
+└── service/
+    └── AiService.kt                        # Pollinations.ai HTTP client, prompt building, robust JSON parsing
+src/main/resources/
+└── logback.xml                              # Logback logging config
+build.gradle.kts                             # Ktor 3.0.3, kotlinx-serialization, Netty, CIO client, Logback
+```
+
 ## Key Config Files
 - `gradle/libs.versions.toml` — Version catalog with all dependency versions (Room, Hilt, KSP, Coroutines, etc.)
 - `build.gradle.kts` — Root build config with KSP and Hilt plugins
@@ -137,6 +166,8 @@ app/src/main/java/com/example/projekat/
 - **Coil** 2.6.0 — Image loading library for Compose (AsyncImage)
 - **WorkManager** 2.9.1 — Background periodic task scheduling (7-day cleanup)
 - **Hilt Work** 1.2.0 — Hilt integration for WorkManager (`@HiltWorker`, `HiltWorkerFactory`)
+- **Retrofit** 2.11.0 — HTTP client for REST API calls to Ktor backend
+- **OkHttp** 4.12.0 — HTTP client with logging interceptor (used by Retrofit)
 
 ## Screenshots
 - `Screenshot 2026-02-28 211429.png` — Notes screen (showed excessive top padding before fix)

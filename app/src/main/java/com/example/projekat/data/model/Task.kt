@@ -9,6 +9,12 @@ enum class TaskStatus {
     COMPLETED
 }
 
+enum class TaskPriority {
+    HIGH,
+    MEDIUM,
+    LOW
+}
+
 @Entity(tableName = "tasks")
 data class Task(
     @PrimaryKey
@@ -16,6 +22,7 @@ data class Task(
     val title: String = "",
     val description: String = "",
     val status: TaskStatus = TaskStatus.IN_PROGRESS,
+    val priority: TaskPriority = TaskPriority.MEDIUM,
     val deadline: Long? = null,
     val noteId: String? = null,
     val colorIndex: Int = 0,
