@@ -129,8 +129,8 @@ class NoteDetailViewModel @Inject constructor(
 
     private suspend fun performSave() {
         val state = _uiState.value
-        // Don't save empty notes
-        if (state.title.isBlank() && state.content.isBlank()) return
+        // Don't save empty notes (but DO save if there are images)
+        if (state.title.isBlank() && state.content.isBlank() && state.imageUris.isEmpty()) return
 
         val now = System.currentTimeMillis()
 
