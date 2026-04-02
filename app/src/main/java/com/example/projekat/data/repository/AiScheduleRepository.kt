@@ -1,11 +1,8 @@
 package com.example.projekat.data.repository
 
+import com.example.projekat.data.ai.AiScheduleService
+import com.example.projekat.data.ai.TaskItem
 import com.example.projekat.data.model.Task
-import com.example.projekat.data.model.TaskPriority
-import com.example.projekat.data.remote.ScheduleApi
-import com.example.projekat.data.remote.ScheduleRequestDto
-import com.example.projekat.data.remote.ScheduledTaskDto
-import com.example.projekat.data.remote.TaskItemDto
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -14,30 +11,37 @@ import javax.inject.Singleton
 
 @Singleton
 class AiScheduleRepository @Inject constructor(
-    private val scheduleApi: ScheduleApi
+    private val aiScheduleService: AiScheduleService
 ) {
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
 
     /**
-     * Sends tasks to the AI backend and returns a list of (taskId -> scheduledDate) pairs.
+     * Sends tasks to the AI service and returns a list of (taskId -> scheduledDate) pairs.
      * Only tasks with a deadline and IN_PROGRESS status are sent.
      */
     suspend fun requestSchedule(tasks: List<Task>): Result<List<ScheduleResult>> {
         return try {
+            // Convert Task entities to TaskItem DTOs
             val taskItems = tasks.map { task ->
-                TaskItemDto(
+                TaskItem(
                     name = task.title,
                     priority = task.priority.name,
                     deadline = formatDeadline(task.deadline)
                 )
             }
 
-            val request = ScheduleRequestDto(tasks = taskItems)
-            val response = scheduleApi.getSchedule(request)
+            // Call AI service (no longer goes through Ktor server)
+            val result = aiScheduleService.requestSchedule(taskItems)
+            
+            if (result.isFailure) {
+                return Result.failure(result.exceptionOrNull() ?: Exception("Unknown error"))
+            }
+
+            val scheduledTasks = result.getOrNull() ?: emptyList()
 
             // Match response items back to original tasks by name
             val results = tasks.map { task ->
-                val scheduled = response.scheduledTasks.find {
+                val scheduled = scheduledTasks.find {
                     it.name.equals(task.title, ignoreCase = true)
                 }
                 ScheduleResult(
@@ -55,12 +59,11 @@ class AiScheduleRepository @Inject constructor(
     }
 
     /**
-     * Check if the backend server is reachable.
+     * Check if the AI service is available.
      */
     suspend fun isServerAvailable(): Boolean {
         return try {
-            val response = scheduleApi.healthCheck()
-            response["status"] == "ok"
+            aiScheduleService.isServiceAvailable()
         } catch (e: Exception) {
             false
         }

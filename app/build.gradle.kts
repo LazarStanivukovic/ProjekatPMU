@@ -72,10 +72,10 @@ dependencies {
     // Hilt WorkManager integration
     implementation(libs.androidx.hilt.work)
     ksp(libs.androidx.hilt.compiler)
-    // Retrofit
-    implementation(libs.retrofit.core)
-    implementation(libs.retrofit.converter.gson)
+    // OkHttp & Gson (for direct API calls)
+    implementation(libs.okhttp.core)
     implementation(libs.okhttp.logging)
+    implementation(libs.gson.core)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
