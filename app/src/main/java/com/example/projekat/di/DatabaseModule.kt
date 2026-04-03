@@ -6,6 +6,7 @@ import com.example.projekat.data.local.AppDatabase
 import com.example.projekat.data.local.MIGRATION_1_2
 import com.example.projekat.data.local.MIGRATION_2_3
 import com.example.projekat.data.local.MIGRATION_3_4
+import com.example.projekat.data.local.MIGRATION_4_5
 import com.example.projekat.data.local.NoteDao
 import com.example.projekat.data.local.TaskDao
 import dagger.Module
@@ -27,7 +28,7 @@ object DatabaseModule {
             AppDatabase::class.java,
             "projekat_database"
         )
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
             .build()
     }
 

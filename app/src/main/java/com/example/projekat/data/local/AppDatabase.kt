@@ -37,9 +37,18 @@ val MIGRATION_3_4 = object : Migration(3, 4) {
     }
 }
 
+val MIGRATION_4_5 = object : Migration(4, 5) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        // Add checklistItems column to notes table (default empty JSON array)
+        db.execSQL("ALTER TABLE notes ADD COLUMN checklistItems TEXT NOT NULL DEFAULT '[]'")
+        // Add checklistItems column to tasks table (default empty JSON array)
+        db.execSQL("ALTER TABLE tasks ADD COLUMN checklistItems TEXT NOT NULL DEFAULT '[]'")
+    }
+}
+
 @Database(
     entities = [Note::class, Task::class],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 @TypeConverters(Converters::class)

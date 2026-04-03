@@ -74,6 +74,7 @@ import com.example.projekat.data.model.Task
 import com.example.projekat.data.model.TaskPriority
 import com.example.projekat.data.model.TaskStatus
 import com.example.projekat.data.repository.ScheduleResult
+import com.example.projekat.ui.components.ChecklistPreview
 import com.example.projekat.ui.theme.NoteBlue
 import com.example.projekat.ui.theme.NoteBlueDark
 import com.example.projekat.ui.theme.NoteCardText
@@ -539,6 +540,17 @@ fun TaskCard(
                             )
                         }
                     }
+                }
+
+                // Checklist preview if task has checklist items
+                if (task.checklistItems.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    ChecklistPreview(
+                        items = task.checklistItems,
+                        textColor = textColor,
+                        checkedColor = if (isDark) Color(0xFF81C784) else Color(0xFF4CAF50),
+                        maxItems = 2
+                    )
                 }
             }
 

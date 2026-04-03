@@ -26,6 +26,7 @@ data class Task(
     val deadline: Long? = null,
     val noteId: String? = null,
     val colorIndex: Int = 0,
+    val checklistItems: List<ChecklistItem> = emptyList(),
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )

@@ -58,6 +58,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -75,7 +77,9 @@ import coil.request.ImageRequest
 import com.example.projekat.data.model.Note
 import com.example.projekat.data.model.TaskPriority
 import com.example.projekat.data.model.TaskStatus
+import com.example.projekat.ui.components.ChecklistEditor
 import com.example.projekat.ui.components.SwipeBackContainer
+import com.example.projekat.ui.components.UndoDialog
 import com.example.projekat.ui.theme.NoteBlue
 import com.example.projekat.ui.theme.NoteBlueDark
 import com.example.projekat.ui.theme.NoteCardText
@@ -94,6 +98,7 @@ import com.example.projekat.ui.theme.PriorityLow
 import com.example.projekat.ui.theme.PriorityMedium
 import com.example.projekat.ui.theme.StatusCompleted
 import com.example.projekat.ui.theme.StatusInProgress
+import com.example.projekat.util.ShakeDetector
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -115,6 +120,7 @@ fun TaskDetailScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val isDark = isSystemInDarkTheme()
+    val context = LocalContext.current
     var showDatePicker by remember { mutableStateOf(false) }
     var showNoteSelector by remember { mutableStateOf(false) }
     val dateFormat = remember { SimpleDateFormat("dd. MMMM yyyy.", Locale.getDefault()) }
@@ -130,17 +136,32 @@ fun TaskDetailScreen(
     val iconTint = if (isDark) Color(0xFFE4E4EC).copy(alpha = 0.7f) else NoteCardText.copy(alpha = 0.6f)
     val chipBg = if (isDark) Color(0xFF2A2A3A).copy(alpha = 0.6f) else Color.White.copy(alpha = 0.6f)
 
+    // ---- Shake to Undo setup ----
+    val shakeDetector = remember {
+        ShakeDetector(
+            context = context,
+            onShake = { viewModel.showUndoDialog() }
+        )
+    }
+
     // Refresh attached note when the screen becomes visible again
     // (e.g. after editing/deleting images in the note detail screen)
+    // Also start/stop shake detection based on lifecycle
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
-        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
-            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
-                viewModel.refreshAttachedNote()
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> {
+                    viewModel.refreshAttachedNote()
+                    shakeDetector.start()
+                }
+                Lifecycle.Event.ON_PAUSE -> shakeDetector.stop()
+                else -> {}
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
+            shakeDetector.stop()
             lifecycleOwner.lifecycle.removeObserver(observer)
         }
     }
@@ -488,6 +509,25 @@ fun TaskDetailScreen(
                     }
                 }
 
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Checklist section
+                HorizontalDivider(
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    color = if (isDark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.08f)
+                )
+                ChecklistEditor(
+                    items = uiState.checklistItems,
+                    onItemToggle = { viewModel.toggleChecklistItem(it) },
+                    onItemTextChange = { id, text -> viewModel.updateChecklistItemText(id, text) },
+                    onItemDelete = { viewModel.deleteChecklistItem(it) },
+                    onItemAdd = { viewModel.addChecklistItem() },
+                    textColor = contentColor,
+                    hintColor = hintColor,
+                    iconTint = iconTint,
+                    checkedColor = if (isDark) Color(0xFF81C784) else Color(0xFF4CAF50)
+                )
+
                 Spacer(modifier = Modifier.height(32.dp))
             }
 
@@ -603,6 +643,14 @@ fun TaskDetailScreen(
                 }
             }
         }
+    }
+
+    // Undo confirmation dialog (triggered by shake)
+    if (uiState.showUndoDialog) {
+        UndoDialog(
+            onConfirm = { viewModel.revertToLastSaved() },
+            onDismiss = { viewModel.dismissUndoDialog() }
+        )
     }
     } // SwipeBackContainer
 }

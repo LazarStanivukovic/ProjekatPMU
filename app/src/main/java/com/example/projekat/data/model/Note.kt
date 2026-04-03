@@ -11,6 +11,7 @@ data class Note(
     val title: String = "",
     val content: String = "",
     val imageUris: List<String> = emptyList(),
+    val checklistItems: List<ChecklistItem> = emptyList(),
     val colorIndex: Int = 0,
     val isBookmarked: Boolean = false,
     val isDeleted: Boolean = false,

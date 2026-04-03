@@ -72,6 +72,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.projekat.data.model.Note
+import com.example.projekat.ui.components.ChecklistPreview
 import com.example.projekat.ui.theme.BookmarkColor
 import com.example.projekat.ui.theme.NoteCardText
 import com.example.projekat.ui.theme.NoteBlue
@@ -465,6 +466,17 @@ fun NoteCard(
                     maxLines = 6,
                     overflow = TextOverflow.Ellipsis
                 )
+
+                // Checklist preview if note has checklist items
+                if (note.checklistItems.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    ChecklistPreview(
+                        items = note.checklistItems,
+                        textColor = textColor,
+                        checkedColor = if (isDark) Color(0xFF81C784) else Color(0xFF4CAF50),
+                        maxItems = 3
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(10.dp))
 

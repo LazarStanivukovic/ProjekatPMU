@@ -56,6 +56,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -70,7 +73,9 @@ import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.example.projekat.ui.components.ChecklistEditor
 import com.example.projekat.ui.components.SwipeBackContainer
+import com.example.projekat.ui.components.UndoDialog
 import com.example.projekat.ui.theme.NoteBlue
 import com.example.projekat.ui.theme.NoteBlueDark
 import com.example.projekat.ui.theme.NoteCardText
@@ -84,6 +89,7 @@ import com.example.projekat.ui.theme.NotePurple
 import com.example.projekat.ui.theme.NotePurpleDark
 import com.example.projekat.ui.theme.NoteYellow
 import com.example.projekat.ui.theme.NoteYellowDark
+import com.example.projekat.util.ShakeDetector
 import java.io.File
 
 private val noteColorsLight = listOf(NoteYellow, NoteGreen, NoteBlue, NotePink, NoteOrange, NotePurple)
@@ -141,6 +147,7 @@ fun NoteDetailScreen(
     val uiState by viewModel.uiState.collectAsState()
     val isDark = isSystemInDarkTheme()
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
 
     val bgColors = if (isDark) noteColorsDark else noteColorsLight
     val noteBackground = bgColors.getOrElse(uiState.colorIndex) { bgColors[0] }
@@ -150,6 +157,30 @@ fun NoteDetailScreen(
     val contentColor = if (isDark) Color(0xFFE4E4EC).copy(alpha = 0.85f) else NoteCardText.copy(alpha = 0.8f)
     val hintColor = if (isDark) Color(0xFFE4E4EC).copy(alpha = 0.4f) else NoteCardText.copy(alpha = 0.35f)
     val iconTint = if (isDark) Color(0xFFE4E4EC).copy(alpha = 0.7f) else NoteCardText.copy(alpha = 0.6f)
+
+    // ---- Shake to Undo setup ----
+    val shakeDetector = remember {
+        ShakeDetector(
+            context = context,
+            onShake = { viewModel.showUndoDialog() }
+        )
+    }
+
+    // Start/stop shake detection based on lifecycle
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> shakeDetector.start()
+                Lifecycle.Event.ON_PAUSE -> shakeDetector.stop()
+                else -> {}
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            shakeDetector.stop()
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
 
     // ---- Camera setup ----
     // Holds the URI where the camera will write the photo
@@ -410,6 +441,26 @@ fun NoteDetailScreen(
                         cursorColor = contentColor
                     )
                 )
+
+                // Checklist section
+                if (uiState.checklistItems.isNotEmpty() || true) { // Always show to allow adding items
+                    Spacer(modifier = Modifier.height(16.dp))
+                    HorizontalDivider(
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                        color = if (isDark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.08f)
+                    )
+                    ChecklistEditor(
+                        items = uiState.checklistItems,
+                        onItemToggle = { viewModel.toggleChecklistItem(it) },
+                        onItemTextChange = { id, text -> viewModel.updateChecklistItemText(id, text) },
+                        onItemDelete = { viewModel.deleteChecklistItem(it) },
+                        onItemAdd = { viewModel.addChecklistItem() },
+                        textColor = contentColor,
+                        hintColor = hintColor,
+                        iconTint = iconTint,
+                        checkedColor = if (isDark) Color(0xFF81C784) else Color(0xFF4CAF50)
+                    )
+                }
             }
 
             // Bottom bar
@@ -428,6 +479,14 @@ fun NoteDetailScreen(
                 }
             )
         }
+    }
+
+    // Undo confirmation dialog (triggered by shake)
+    if (uiState.showUndoDialog) {
+        UndoDialog(
+            onConfirm = { viewModel.revertToLastSaved() },
+            onDismiss = { viewModel.dismissUndoDialog() }
+        )
     }
     } // SwipeBackContainer
 }
