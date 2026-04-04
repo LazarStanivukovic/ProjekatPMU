@@ -11,7 +11,9 @@ import com.example.projekat.data.model.TaskPriority
 import com.example.projekat.data.model.TaskStatus
 import com.example.projekat.data.repository.NoteRepository
 import com.example.projekat.data.repository.TaskRepository
+import com.example.projekat.location.GeofenceManager
 import com.example.projekat.notification.DeadlineScheduler
+import com.example.projekat.ui.components.LocationData
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -33,6 +35,11 @@ data class TaskDetailUiState(
     val attachedNote: Note? = null,
     val colorIndex: Int = 0,
     val checklistItems: List<ChecklistItem> = emptyList(),
+    // Location fields
+    val locationLat: Double? = null,
+    val locationLng: Double? = null,
+    val locationName: String? = null,
+    val locationRadius: Int = 100,
     val showColorPicker: Boolean = false,
     val isNew: Boolean = true,
     val isLoading: Boolean = false,
@@ -47,6 +54,7 @@ class TaskDetailViewModel @Inject constructor(
     private val taskRepository: TaskRepository,
     private val noteRepository: NoteRepository,
     private val deadlineScheduler: DeadlineScheduler,
+    private val geofenceManager: GeofenceManager,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -97,6 +105,10 @@ class TaskDetailViewModel @Inject constructor(
                 attachedNote = attachedNote,
                 colorIndex = task.colorIndex,
                 checklistItems = task.checklistItems,
+                locationLat = task.locationLat,
+                locationLng = task.locationLng,
+                locationName = task.locationName,
+                locationRadius = task.locationRadius,
                 isNew = false,
                 isLoading = false,
                 availableNotes = _uiState.value.availableNotes
@@ -168,6 +180,17 @@ class TaskDetailViewModel @Inject constructor(
 
     fun toggleColorPicker() {
         _uiState.value = _uiState.value.copy(showColorPicker = !_uiState.value.showColorPicker)
+    }
+
+    // ---- Location management ----
+    fun updateLocation(locationData: LocationData?) {
+        _uiState.value = _uiState.value.copy(
+            locationLat = locationData?.lat,
+            locationLng = locationData?.lng,
+            locationName = locationData?.name,
+            locationRadius = locationData?.radius ?: 100
+        )
+        scheduleAutoSave()
     }
 
     // ---- Checklist management ----
@@ -256,6 +279,10 @@ class TaskDetailViewModel @Inject constructor(
                 noteId = state.noteId,
                 colorIndex = state.colorIndex,
                 checklistItems = state.checklistItems,
+                locationLat = state.locationLat,
+                locationLng = state.locationLng,
+                locationName = state.locationName,
+                locationRadius = state.locationRadius,
                 createdAt = now,
                 updatedAt = now
             )
@@ -272,6 +299,17 @@ class TaskDetailViewModel @Inject constructor(
                     state.deadline
                 )
             }
+
+            // Add geofence for new task with location
+            if (state.locationLat != null && state.locationLng != null && state.status == TaskStatus.IN_PROGRESS) {
+                geofenceManager.addGeofenceForTask(
+                    task.id,
+                    state.title,
+                    state.locationLat,
+                    state.locationLng,
+                    state.locationRadius
+                )
+            }
         } else {
             val existingTask = taskRepository.getTaskById(persistedTaskId!!) ?: return
             taskRepository.updateTask(
@@ -283,7 +321,11 @@ class TaskDetailViewModel @Inject constructor(
                     deadline = state.deadline,
                     noteId = state.noteId,
                     colorIndex = state.colorIndex,
-                    checklistItems = state.checklistItems
+                    checklistItems = state.checklistItems,
+                    locationLat = state.locationLat,
+                    locationLng = state.locationLng,
+                    locationName = state.locationName,
+                    locationRadius = state.locationRadius
                 )
             )
             _uiState.value = state.copy(hasUnsavedChanges = false)
@@ -300,16 +342,32 @@ class TaskDetailViewModel @Inject constructor(
                 // No deadline or task completed — cancel notification
                 deadlineScheduler.cancelDeadlineNotification(persistedTaskId!!)
             }
+
+            // Update geofence
+            if (state.locationLat != null && state.locationLng != null && state.status == TaskStatus.IN_PROGRESS) {
+                geofenceManager.updateGeofenceForTask(
+                    persistedTaskId!!,
+                    state.title,
+                    state.locationLat,
+                    state.locationLng,
+                    state.locationRadius
+                )
+            } else {
+                // No location or task completed — remove geofence
+                geofenceManager.removeGeofenceForTask(persistedTaskId!!)
+            }
         }
     }
 
     fun deleteTask() {
         viewModelScope.launch {
             autoSaveJob?.cancel()
-            // Cancel any pending notification before deleting
-            persistedTaskId?.let { deadlineScheduler.cancelDeadlineNotification(it) }
-            if (persistedTaskId != null) {
-                taskRepository.deleteTaskById(persistedTaskId!!)
+            persistedTaskId?.let { taskId ->
+                // Cancel any pending deadline notification before deleting
+                deadlineScheduler.cancelDeadlineNotification(taskId)
+                // Remove geofence before deleting
+                geofenceManager.removeGeofenceForTask(taskId)
+                taskRepository.deleteTaskById(taskId)
             }
             _uiState.value = _uiState.value.copy(isSaved = true)
         }
@@ -363,9 +421,25 @@ class TaskDetailViewModel @Inject constructor(
                                 deadline = original.deadline,
                                 noteId = original.noteId,
                                 colorIndex = original.colorIndex,
-                                checklistItems = original.checklistItems
+                                checklistItems = original.checklistItems,
+                                locationLat = original.locationLat,
+                                locationLng = original.locationLng,
+                                locationName = original.locationName,
+                                locationRadius = original.locationRadius
                             )
                         )
+                        // Also update geofence to match reverted location
+                        if (original.locationLat != null && original.locationLng != null && original.status == TaskStatus.IN_PROGRESS) {
+                            geofenceManager.updateGeofenceForTask(
+                                persistedTaskId!!,
+                                original.title,
+                                original.locationLat,
+                                original.locationLng,
+                                original.locationRadius
+                            )
+                        } else {
+                            geofenceManager.removeGeofenceForTask(persistedTaskId!!)
+                        }
                     }
                 }
             }
@@ -385,6 +459,10 @@ class TaskDetailViewModel @Inject constructor(
                original.deadline != current.deadline ||
                original.noteId != current.noteId ||
                original.colorIndex != current.colorIndex ||
-               original.checklistItems != current.checklistItems
+               original.checklistItems != current.checklistItems ||
+               original.locationLat != current.locationLat ||
+               original.locationLng != current.locationLng ||
+               original.locationName != current.locationName ||
+               original.locationRadius != current.locationRadius
     }
 }

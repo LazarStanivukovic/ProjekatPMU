@@ -34,15 +34,27 @@ class ProjekatApplication : Application(), Configuration.Provider {
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
+            // Deadline notifications channel
+            val deadlineChannel = NotificationChannel(
                 DEADLINE_CHANNEL_ID,
                 "Rokovi za taskove",
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
                 description = "Obavestenja kada rok za task istekne"
             }
+
+            // Location-based notifications channel
+            val locationChannel = NotificationChannel(
+                LOCATION_CHANNEL_ID,
+                "Lokacijska obavestenja",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Obavestenja kada se priblizite lokaciji za task"
+            }
+
             val notificationManager = getSystemService(NotificationManager::class.java)
-            notificationManager.createNotificationChannel(channel)
+            notificationManager.createNotificationChannel(deadlineChannel)
+            notificationManager.createNotificationChannel(locationChannel)
         }
     }
 
@@ -65,5 +77,6 @@ class ProjekatApplication : Application(), Configuration.Provider {
 
     companion object {
         const val DEADLINE_CHANNEL_ID = "deadline_notifications"
+        const val LOCATION_CHANNEL_ID = "location_notifications"
     }
 }

@@ -1,6 +1,8 @@
 package com.example.projekat.data.local
 
+import android.content.Context
 import androidx.room.Database
+import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import androidx.room.migration.Migration
@@ -46,13 +48,49 @@ val MIGRATION_4_5 = object : Migration(4, 5) {
     }
 }
 
+val MIGRATION_5_6 = object : Migration(5, 6) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        // Add location fields to tasks table for geofencing feature
+        db.execSQL("ALTER TABLE tasks ADD COLUMN locationLat REAL")
+        db.execSQL("ALTER TABLE tasks ADD COLUMN locationLng REAL")
+        db.execSQL("ALTER TABLE tasks ADD COLUMN locationName TEXT")
+        db.execSQL("ALTER TABLE tasks ADD COLUMN locationRadius INTEGER NOT NULL DEFAULT 100")
+    }
+}
+
 @Database(
     entities = [Note::class, Task::class],
-    version = 5,
+    version = 6,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun noteDao(): NoteDao
     abstract fun taskDao(): TaskDao
+
+    companion object {
+        @Volatile
+        private var INSTANCE: AppDatabase? = null
+
+        /**
+         * Get database instance for use outside of Hilt (e.g., BroadcastReceiver).
+         * For normal dependency injection, use DatabaseModule.
+         */
+        fun getInstance(context: Context): AppDatabase {
+            return INSTANCE ?: synchronized(this) {
+                val instance = Room.databaseBuilder(
+                    context.applicationContext,
+                    AppDatabase::class.java,
+                    "projekat_database"
+                )
+                    .addMigrations(
+                        MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4,
+                        MIGRATION_4_5, MIGRATION_5_6
+                    )
+                    .build()
+                INSTANCE = instance
+                instance
+            }
+        }
+    }
 }

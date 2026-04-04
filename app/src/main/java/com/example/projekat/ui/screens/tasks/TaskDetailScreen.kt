@@ -78,6 +78,8 @@ import com.example.projekat.data.model.Note
 import com.example.projekat.data.model.TaskPriority
 import com.example.projekat.data.model.TaskStatus
 import com.example.projekat.ui.components.ChecklistEditor
+import com.example.projekat.ui.components.LocationData
+import com.example.projekat.ui.components.LocationPicker
 import com.example.projekat.ui.components.SwipeBackContainer
 import com.example.projekat.ui.components.UndoDialog
 import com.example.projekat.ui.theme.NoteBlue
@@ -510,6 +512,35 @@ fun TaskDetailScreen(
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
+
+                // ---- Location section ----
+                HorizontalDivider(
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    color = if (isDark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.08f)
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = "Lokacija za obavestenje",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = iconTint,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                )
+                LocationPicker(
+                    currentLocation = if (uiState.locationLat != null && uiState.locationLng != null) {
+                        LocationData(
+                            lat = uiState.locationLat!!,
+                            lng = uiState.locationLng!!,
+                            name = uiState.locationName ?: "",
+                            radius = uiState.locationRadius
+                        )
+                    } else null,
+                    onLocationSelected = { viewModel.updateLocation(it) },
+                    titleColor = titleColor,
+                    hintColor = hintColor,
+                    iconTint = iconTint,
+                    chipBg = chipBg
+                )
+                Spacer(modifier = Modifier.height(12.dp))
 
                 // Checklist section
                 HorizontalDivider(

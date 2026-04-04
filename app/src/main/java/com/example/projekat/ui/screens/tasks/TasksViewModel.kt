@@ -7,6 +7,7 @@ import com.example.projekat.data.model.TaskStatus
 import com.example.projekat.data.repository.AiScheduleRepository
 import com.example.projekat.data.repository.ScheduleResult
 import com.example.projekat.data.repository.TaskRepository
+import com.example.projekat.location.GeofenceManager
 import com.example.projekat.notification.DeadlineScheduler
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -38,7 +39,8 @@ data class TasksUiState(
 class TasksViewModel @Inject constructor(
     private val taskRepository: TaskRepository,
     private val aiScheduleRepository: AiScheduleRepository,
-    private val deadlineScheduler: DeadlineScheduler
+    private val deadlineScheduler: DeadlineScheduler,
+    private val geofenceManager: GeofenceManager
 ) : ViewModel() {
 
     private val _aiState = MutableStateFlow(AiState())
@@ -72,13 +74,29 @@ class TasksViewModel @Inject constructor(
                 TaskStatus.COMPLETED -> TaskStatus.IN_PROGRESS
             }
             if (newStatus == TaskStatus.COMPLETED) {
+                // Cancel deadline notification
                 deadlineScheduler.cancelDeadlineNotification(task.id)
-            } else if (task.deadline != null) {
-                deadlineScheduler.scheduleDeadlineNotification(
-                    task.id,
-                    task.title,
-                    task.deadline
-                )
+                // Remove geofence when task is completed
+                geofenceManager.removeGeofenceForTask(task.id)
+            } else {
+                // Re-schedule deadline notification
+                if (task.deadline != null) {
+                    deadlineScheduler.scheduleDeadlineNotification(
+                        task.id,
+                        task.title,
+                        task.deadline
+                    )
+                }
+                // Re-add geofence when task is moved back to in-progress
+                if (task.locationLat != null && task.locationLng != null) {
+                    geofenceManager.addGeofenceForTask(
+                        task.id,
+                        task.title,
+                        task.locationLat,
+                        task.locationLng,
+                        task.locationRadius
+                    )
+                }
             }
         }
     }
@@ -86,6 +104,8 @@ class TasksViewModel @Inject constructor(
     fun deleteTask(task: Task) {
         viewModelScope.launch {
             deadlineScheduler.cancelDeadlineNotification(task.id)
+            // Remove geofence when task is deleted
+            geofenceManager.removeGeofenceForTask(task.id)
             taskRepository.deleteTask(task)
         }
     }

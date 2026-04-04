@@ -2,6 +2,7 @@ package com.example.projekat.ui.components
 
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Undo
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
@@ -28,7 +29,7 @@ fun UndoDialog(
         onDismissRequest = onDismiss,
         icon = {
             Icon(
-                Icons.Default.Undo,
+                Icons.AutoMirrored.Filled.Undo,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(32.dp)
