@@ -8,9 +8,11 @@ import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.example.projekat.worker.CleanupWorker
+import com.example.projekat.worker.SyncWorker
 import dagger.hilt.android.HiltAndroidApp
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
@@ -30,6 +32,7 @@ class ProjekatApplication : Application(), Configuration.Provider {
         super.onCreate()
         createNotificationChannel()
         scheduleCleanupWorker()
+        scheduleSyncWorker()
     }
 
     private fun createNotificationChannel() {
@@ -72,6 +75,23 @@ class ProjekatApplication : Application(), Configuration.Provider {
             CleanupWorker.WORK_NAME,
             ExistingPeriodicWorkPolicy.KEEP,
             cleanupRequest
+        )
+    }
+
+    private fun scheduleSyncWorker() {
+        val syncRequest = PeriodicWorkRequestBuilder<SyncWorker>(
+            repeatInterval = 15,
+            repeatIntervalTimeUnit = TimeUnit.MINUTES
+        ).setConstraints(
+            Constraints.Builder()
+                .setRequiredNetworkType(NetworkType.CONNECTED)
+                .build()
+        ).build()
+
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+            SyncWorker.WORK_NAME,
+            ExistingPeriodicWorkPolicy.KEEP,
+            syncRequest
         )
     }
 

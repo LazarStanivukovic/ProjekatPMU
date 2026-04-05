@@ -33,5 +33,8 @@ data class Task(
     val locationName: String? = null,
     val locationRadius: Int = 100,  // meters
     val createdAt: Long = System.currentTimeMillis(),
-    val updatedAt: Long = System.currentTimeMillis()
+    val updatedAt: Long = System.currentTimeMillis(),
+    // Sync fields for Firebase Cloud Sync
+    val syncStatus: SyncStatus = SyncStatus.LOCAL_ONLY,
+    val cloudId: String? = null
 )

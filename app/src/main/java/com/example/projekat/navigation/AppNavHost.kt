@@ -7,20 +7,24 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import com.example.projekat.ui.screens.auth.LoginScreen
+import com.example.projekat.ui.screens.auth.RegisterScreen
 import com.example.projekat.ui.screens.calendar.CalendarScreen
 import com.example.projekat.ui.screens.notes.NoteDetailScreen
 import com.example.projekat.ui.screens.notes.NotesScreen
+import com.example.projekat.ui.screens.settings.SettingsScreen
 import com.example.projekat.ui.screens.tasks.TaskDetailScreen
 import com.example.projekat.ui.screens.tasks.TasksScreen
 
 @Composable
 fun AppNavHost(
     navController: NavHostController,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    startDestination: String = Screen.Notes.route
 ) {
     NavHost(
         navController = navController,
-        startDestination = Screen.Notes.route,
+        startDestination = startDestination,
         modifier = modifier
     ) {
         composable(Screen.Notes.route) {
@@ -30,6 +34,9 @@ fun AppNavHost(
                 },
                 onCreateNote = {
                     navController.navigate(Screen.NoteCreate.route)
+                },
+                onSettingsClick = {
+                    navController.navigate(Screen.Settings.route)
                 }
             )
         }
@@ -91,6 +98,43 @@ fun AppNavHost(
                 onBack = { navController.popBackStack() },
                 onNoteClick = { noteId ->
                     navController.navigate(Screen.NoteDetail.createRoute(noteId))
+                }
+            )
+        }
+
+        // Auth screens
+        composable(Screen.Login.route) {
+            LoginScreen(
+                onNavigateToRegister = {
+                    navController.navigate(Screen.Register.route)
+                },
+                onLoginSuccess = {
+                    navController.navigate(Screen.Notes.route) {
+                        popUpTo(Screen.Login.route) { inclusive = true }
+                    }
+                }
+            )
+        }
+
+        composable(Screen.Register.route) {
+            RegisterScreen(
+                onNavigateToLogin = {
+                    navController.popBackStack()
+                },
+                onRegisterSuccess = {
+                    navController.navigate(Screen.Notes.route) {
+                        popUpTo(Screen.Login.route) { inclusive = true }
+                    }
+                }
+            )
+        }
+
+        // Settings screen
+        composable(Screen.Settings.route) {
+            SettingsScreen(
+                onBack = { navController.popBackStack() },
+                onNavigateToLogin = {
+                    navController.navigate(Screen.Login.route)
                 }
             )
         }

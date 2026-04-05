@@ -17,5 +17,8 @@ data class Note(
     val isDeleted: Boolean = false,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
-    val deletedAt: Long? = null
+    val deletedAt: Long? = null,
+    // Sync fields for Firebase Cloud Sync
+    val syncStatus: SyncStatus = SyncStatus.LOCAL_ONLY,
+    val cloudId: String? = null
 )

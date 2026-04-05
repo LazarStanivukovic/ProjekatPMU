@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.RestoreFromTrash
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.StickyNote2
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.DeleteSweep
@@ -103,6 +104,7 @@ enum class NoteFilter {
 fun NotesScreen(
     onNoteClick: (String) -> Unit,
     onCreateNote: () -> Unit,
+    onSettingsClick: () -> Unit = {},
     viewModel: NotesViewModel = hiltViewModel()
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -209,8 +211,7 @@ fun NotesScreen(
                         singleLine = true,
                         modifier = Modifier
                             .weight(1f)
-                            .height(52.dp)
-                            .padding(end = 8.dp),
+                            .height(52.dp),
                         shape = RoundedCornerShape(28.dp),
                         colors = OutlinedTextFieldDefaults.colors(
                             unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
@@ -220,6 +221,15 @@ fun NotesScreen(
                         ),
                         textStyle = MaterialTheme.typography.bodyMedium
                     )
+
+                    // Settings button
+                    IconButton(onClick = onSettingsClick) {
+                        Icon(
+                            Icons.Default.Settings,
+                            contentDescription = "Podesavanja",
+                            tint = MaterialTheme.colorScheme.onBackground
+                        )
+                    }
                 }
 
                 // Title row with optional "empty trash" button

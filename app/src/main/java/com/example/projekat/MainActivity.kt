@@ -62,6 +62,10 @@ class MainActivity : ComponentActivity() {
                     Screen.Notes.route,
                     Screen.Tasks.route,
                     Screen.Calendar.route
+                ) && currentRoute !in listOf(
+                    Screen.Login.route,
+                    Screen.Register.route,
+                    Screen.Settings.route
                 )
 
                 Scaffold(

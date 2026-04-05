@@ -12,4 +12,11 @@ sealed class Screen(val route: String) {
         fun createRoute(taskId: String) = "task_detail/$taskId"
     }
     data object TaskCreate : Screen("task_create")
+    
+    // Auth screens
+    data object Login : Screen("login")
+    data object Register : Screen("register")
+    
+    // Settings
+    data object Settings : Screen("settings")
 }

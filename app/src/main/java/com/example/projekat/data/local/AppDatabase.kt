@@ -58,9 +58,20 @@ val MIGRATION_5_6 = object : Migration(5, 6) {
     }
 }
 
+val MIGRATION_6_7 = object : Migration(6, 7) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        // Add sync fields to notes table for Firebase Cloud Sync
+        db.execSQL("ALTER TABLE notes ADD COLUMN syncStatus TEXT NOT NULL DEFAULT 'LOCAL_ONLY'")
+        db.execSQL("ALTER TABLE notes ADD COLUMN cloudId TEXT")
+        // Add sync fields to tasks table for Firebase Cloud Sync
+        db.execSQL("ALTER TABLE tasks ADD COLUMN syncStatus TEXT NOT NULL DEFAULT 'LOCAL_ONLY'")
+        db.execSQL("ALTER TABLE tasks ADD COLUMN cloudId TEXT")
+    }
+}
+
 @Database(
     entities = [Note::class, Task::class],
-    version = 6,
+    version = 7,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -85,7 +96,7 @@ abstract class AppDatabase : RoomDatabase() {
                 )
                     .addMigrations(
                         MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4,
-                        MIGRATION_4_5, MIGRATION_5_6
+                        MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7
                     )
                     .build()
                 INSTANCE = instance
