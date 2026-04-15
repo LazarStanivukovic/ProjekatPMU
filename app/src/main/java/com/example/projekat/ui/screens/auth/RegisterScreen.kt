@@ -14,7 +14,6 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Visibility
@@ -92,16 +91,6 @@ fun RegisterScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            // Back button
-            IconButton(
-                onClick = onNavigateToLogin,
-                modifier = Modifier.align(Alignment.Start),
-                enabled = !uiState.isLoading
-            ) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Nazad")
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
 
             // Title
             Text(
