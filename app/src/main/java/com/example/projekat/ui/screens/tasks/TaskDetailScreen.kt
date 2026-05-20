@@ -23,10 +23,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.NoteAdd
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
@@ -35,15 +37,21 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
+import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.Repeat
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
@@ -71,10 +79,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+//import androidx.compose.ui.text.input.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.projekat.data.model.Note
+import com.example.projekat.data.model.RepeatInterval
 import com.example.projekat.data.model.TaskPriority
 import com.example.projekat.data.model.TaskStatus
 import com.example.projekat.ui.components.ChecklistEditor
@@ -112,6 +123,12 @@ private val noteColorsDark = listOf(NoteYellowDark, NoteGreenDark, NoteBlueDark,
 // Small swatches in the color picker always show the light pastel so they're recognizable
 private val noteColorSwatches = listOf(NoteYellow, NoteGreen, NoteBlue, NotePink, NoteOrange, NotePurple)
 
+private enum class DatePickerTarget {
+    START,
+    END,
+    REPEAT_END
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TaskDetailScreen(
@@ -123,9 +140,15 @@ fun TaskDetailScreen(
     val uiState by viewModel.uiState.collectAsState()
     val isDark = isSystemInDarkTheme()
     val context = LocalContext.current
-    var showDatePicker by remember { mutableStateOf(false) }
+    var activeDatePicker by remember { mutableStateOf<DatePickerTarget?>(null) }
     var showNoteSelector by remember { mutableStateOf(false) }
     val dateFormat = remember { SimpleDateFormat("dd. MMMM yyyy.", Locale.getDefault()) }
+    val dateTimeFormat = remember { SimpleDateFormat("dd. MMMM yyyy. HH:mm", Locale.getDefault()) }
+    var showTimePicker by remember { mutableStateOf(false) }
+    var timePickerTarget by remember { mutableStateOf<DatePickerTarget?>(null) }
+    var showRepeatDropdown by remember { mutableStateOf(false) }
+    var timeHours by remember { mutableStateOf(9) }
+    var timeMinutes by remember { mutableStateOf(0) }
 
     // Color from the task's colorIndex
     val bgColors = if (isDark) noteColorsDark else noteColorsLight
@@ -183,8 +206,7 @@ fun TaskDetailScreen(
     }
 
     // Date Picker Dialog
-    if (showDatePicker) {
-        // Najraniji datum koji moze da se odabere je sutra (ponoć UTC)
+    if (activeDatePicker != null) {
         val tomorrowMillis = remember {
             Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC")).apply {
                 timeInMillis = System.currentTimeMillis()
@@ -195,12 +217,20 @@ fun TaskDetailScreen(
                 set(Calendar.MILLISECOND, 0)
             }.timeInMillis
         }
+        val initialDate = when (activeDatePicker) {
+            DatePickerTarget.START -> uiState.startDate
+            DatePickerTarget.END -> uiState.endDate
+            DatePickerTarget.REPEAT_END -> uiState.repeatEndDate
+            else -> null
+        }?.takeIf { it >= tomorrowMillis } ?: tomorrowMillis
+
         val datePickerState = rememberDatePickerState(
-            initialSelectedDateMillis = uiState.deadline?.takeIf { it >= tomorrowMillis } ?: tomorrowMillis,
+            initialSelectedDateMillis = initialDate,
             selectableDates = object : SelectableDates {
                 override fun isSelectableDate(utcTimeMillis: Long): Boolean {
                     return utcTimeMillis >= tomorrowMillis
                 }
+
                 override fun isSelectableYear(year: Int): Boolean {
                     val currentYear = Calendar.getInstance().get(Calendar.YEAR)
                     return year >= currentYear
@@ -208,23 +238,85 @@ fun TaskDetailScreen(
             }
         )
         DatePickerDialog(
-            onDismissRequest = { showDatePicker = false },
+            onDismissRequest = { activeDatePicker = null },
             confirmButton = {
                 TextButton(onClick = {
-                    datePickerState.selectedDateMillis?.let { viewModel.updateDeadline(it) }
-                    showDatePicker = false
+                    datePickerState.selectedDateMillis?.let { selectedMillis ->
+                        val target = activeDatePicker
+                        when (target) {
+                            DatePickerTarget.START -> {
+                                val adjusted = applyTimeIfNeeded(selectedMillis, uiState.hasTime, timeHours, timeMinutes)
+                                viewModel.updateStartDate(adjusted)
+                                if (uiState.hasTime) {
+                                    val localCal = Calendar.getInstance().apply { timeInMillis = adjusted }
+                                    timeHours = localCal.get(Calendar.HOUR_OF_DAY)
+                                    timeMinutes = localCal.get(Calendar.MINUTE)
+                                    timePickerTarget = DatePickerTarget.START
+                                    showTimePicker = true
+                                }
+                            }
+                            DatePickerTarget.END -> {
+                                val adjusted = applyTimeIfNeeded(selectedMillis, uiState.hasTime, timeHours, timeMinutes)
+                                viewModel.updateEndDate(adjusted)
+                                if (uiState.hasTime) {
+                                    val localCal = Calendar.getInstance().apply { timeInMillis = adjusted }
+                                    timeHours = localCal.get(Calendar.HOUR_OF_DAY)
+                                    timeMinutes = localCal.get(Calendar.MINUTE)
+                                    timePickerTarget = DatePickerTarget.END
+                                    showTimePicker = true
+                                }
+                            }
+                            DatePickerTarget.REPEAT_END -> {
+                                viewModel.updateRepeatEndDate(applyTimeIfNeeded(selectedMillis, false, 0, 0))
+                            }
+                            null -> Unit
+                        }
+                    }
+                    activeDatePicker = null
                 }) {
                     Text("Potvrdi")
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showDatePicker = false }) {
+                TextButton(onClick = { activeDatePicker = null }) {
                     Text("Otkazi")
                 }
             }
         ) {
             DatePicker(state = datePickerState)
         }
+    }
+
+    if (showTimePicker) {
+        TimePickerDialog(
+            hours = timeHours,
+            minutes = timeMinutes,
+            onHoursChange = { timeHours = it },
+            onMinutesChange = { timeMinutes = it },
+            onConfirm = {
+                when (timePickerTarget) {
+                    DatePickerTarget.START -> {
+                        val startDate = uiState.startDate
+                        if (startDate != null) {
+                            viewModel.updateStartDate(applyTimeIfNeeded(startDate, true, timeHours, timeMinutes))
+                        }
+                    }
+                    DatePickerTarget.END -> {
+                        val endDate = uiState.endDate
+                        if (endDate != null) {
+                            viewModel.updateEndDate(applyTimeIfNeeded(endDate, true, timeHours, timeMinutes))
+                        }
+                    }
+                    else -> Unit
+                }
+                showTimePicker = false
+                timePickerTarget = null
+            },
+            onDismiss = { 
+                showTimePicker = false
+                timePickerTarget = null
+            }
+        )
     }
 
     SwipeBackContainer(onBack = onBack) {
@@ -392,47 +484,165 @@ fun TaskDetailScreen(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // ---- Deadline card ----
+                // ---- Date section ----
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp)
-                        .clickable { showDatePicker = true },
+                        .padding(horizontal = 16.dp),
                     shape = RoundedCornerShape(14.dp),
                     colors = CardDefaults.cardColors(containerColor = chipBg)
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            Icons.Default.CalendarToday,
-                            contentDescription = null,
-                            tint = if (uiState.deadline != null) MaterialTheme.colorScheme.primary else iconTint,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text(
-                            text = if (uiState.deadline != null) dateFormat.format(Date(uiState.deadline!!))
-                            else "Dodaj krajnji rok...",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = if (uiState.deadline != null) titleColor else hintColor,
-                            modifier = Modifier.weight(1f)
-                        )
-                        if (uiState.deadline != null) {
-                            IconButton(
-                                onClick = { viewModel.updateDeadline(null) },
-                                modifier = Modifier.size(24.dp)
-                            ) {
-                                Icon(
-                                    Icons.Default.Close,
-                                    contentDescription = "Ukloni rok",
-                                    tint = iconTint,
-                                    modifier = Modifier.size(18.dp)
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Default.CalendarToday,
+                                contentDescription = null,
+                                tint = if (uiState.startDate != null) MaterialTheme.colorScheme.primary else iconTint,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(
+                                text = "Datum",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = iconTint,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "Vreme",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = iconTint
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Switch(
+                                    checked = uiState.hasTime,
+                                    onCheckedChange = { checked ->
+                                        viewModel.updateHasTime(checked)
+                                        if (checked && uiState.startDate != null) {
+                                            val baseDate = uiState.startDate ?: System.currentTimeMillis()
+                                            val localCal = Calendar.getInstance().apply { timeInMillis = baseDate }
+                                            timeHours = localCal.get(Calendar.HOUR_OF_DAY)
+                                            timeMinutes = localCal.get(Calendar.MINUTE)
+                                            timePickerTarget = DatePickerTarget.START
+                                            showTimePicker = true
+                                        }
+                                    }
                                 )
                             }
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        DateRow(
+                            label = "Od",
+                            value = formatDateTime(uiState.startDate, uiState.hasTime, dateFormat, dateTimeFormat),
+                            hint = "Izaberi datum",
+                            iconTint = iconTint,
+                            titleColor = titleColor,
+                            hintColor = hintColor,
+                            onClick = { activeDatePicker = DatePickerTarget.START },
+                            onClear = if (uiState.startDate != null) {
+                                {
+                                    viewModel.updateStartDate(null)
+                                    viewModel.updateEndDate(null)
+                                }
+                            } else null
+                        )
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        DateRow(
+                            label = "Do",
+                            value = formatDateTime(uiState.endDate, uiState.hasTime, dateFormat, dateTimeFormat),
+                            hint = "Opcioni kraj",
+                            iconTint = iconTint,
+                            titleColor = titleColor,
+                            hintColor = hintColor,
+                            enabled = uiState.startDate != null,
+                            onClick = {
+                                if (uiState.startDate == null) {
+                                    activeDatePicker = DatePickerTarget.START
+                                } else {
+                                    activeDatePicker = DatePickerTarget.END
+                                }
+                            },
+                            onClear = if (uiState.endDate != null) { { viewModel.updateEndDate(null) } } else null
+                        )
+
+                        Spacer(modifier = Modifier.height(10.dp))
+                        HorizontalDivider(color = if (isDark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.08f))
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        // Repeat setting
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Default.Repeat,
+                                contentDescription = null,
+                                tint = if (uiState.repeatInterval != RepeatInterval.NONE) MaterialTheme.colorScheme.primary else iconTint,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(
+                                text = "Ponavljanje",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = iconTint,
+                                modifier = Modifier.weight(1f)
+                            )
+                            
+                            Box {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.clickable { showRepeatDropdown = true }
+                                ) {
+                                    Text(
+                                        text = when (uiState.repeatInterval) {
+                                            RepeatInterval.NONE -> "Nikad"
+                                            RepeatInterval.DAILY -> "Dnevno"
+                                            RepeatInterval.WEEKLY -> "Nedeljno"
+                                            RepeatInterval.MONTHLY -> "Mesečno"
+                                            RepeatInterval.YEARLY -> "Godišnje"
+                                        },
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = titleColor
+                                    )
+                                    Icon(
+                                        Icons.Default.ArrowDropDown,
+                                        contentDescription = null,
+                                        tint = iconTint
+                                    )
+                                }
+                                DropdownMenu(
+                                    expanded = showRepeatDropdown,
+                                    onDismissRequest = { showRepeatDropdown = false }
+                                ) {
+                                    DropdownMenuItem(text = { Text("Nikad") }, onClick = { viewModel.updateRepeatInterval(RepeatInterval.NONE); showRepeatDropdown = false })
+                                    DropdownMenuItem(text = { Text("Dnevno") }, onClick = { viewModel.updateRepeatInterval(RepeatInterval.DAILY); showRepeatDropdown = false })
+                                    DropdownMenuItem(text = { Text("Nedeljno") }, onClick = { viewModel.updateRepeatInterval(RepeatInterval.WEEKLY); showRepeatDropdown = false })
+                                    DropdownMenuItem(text = { Text("Mesečno") }, onClick = { viewModel.updateRepeatInterval(RepeatInterval.MONTHLY); showRepeatDropdown = false })
+                                    DropdownMenuItem(text = { Text("Godišnje") }, onClick = { viewModel.updateRepeatInterval(RepeatInterval.YEARLY); showRepeatDropdown = false })
+                                }
+                            }
+                        }
+
+                        if (uiState.repeatInterval != RepeatInterval.NONE) {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            DateRow(
+                                label = "Do",
+                                value = formatDateTime(uiState.repeatEndDate, uiState.hasTime, dateFormat, dateTimeFormat),
+                                hint = "Kraj ponavljanja (opciono)",
+                                iconTint = iconTint,
+                                titleColor = titleColor,
+                                hintColor = hintColor,
+                                enabled = true,
+                                onClick = { activeDatePicker = DatePickerTarget.REPEAT_END },
+                                onClear = if (uiState.repeatEndDate != null) { { viewModel.updateRepeatEndDate(null) } } else null
+                            )
                         }
                     }
                 }
@@ -684,6 +894,194 @@ fun TaskDetailScreen(
         )
     }
     } // SwipeBackContainer
+}
+
+@Composable
+private fun DateRow(
+    label: String,
+    value: String?,
+    hint: String,
+    iconTint: Color,
+    titleColor: Color,
+    hintColor: Color,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+    onClear: (() -> Unit)? = null
+) {
+    val rowAlpha = if (enabled) 1f else 0.5f
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = iconTint.copy(alpha = rowAlpha),
+            modifier = Modifier.width(28.dp)
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(
+            text = value ?: hint,
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (value != null) titleColor.copy(alpha = rowAlpha) else hintColor.copy(alpha = rowAlpha),
+            modifier = Modifier.weight(1f)
+        )
+        if (onClear != null && enabled) {
+            IconButton(
+                onClick = onClear,
+                modifier = Modifier.size(24.dp)
+            ) {
+                Icon(
+                    Icons.Default.Close,
+                    contentDescription = "Ukloni datum",
+                    tint = iconTint,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun TimePickerDialog(
+    hours: Int,
+    minutes: Int,
+    onHoursChange: (Int) -> Unit,
+    onMinutesChange: (Int) -> Unit,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(onClick = onConfirm) { Text("Potvrdi") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Otkazi") }
+        },
+        title = { Text("Vreme") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                TimePickerRow(
+                    label = "Sati",
+                    value = hours,
+                    onValueChange = onHoursChange,
+                    range = 0..23
+                )
+                TimePickerRow(
+                    label = "Min",
+                    value = minutes,
+                    onValueChange = onMinutesChange,
+                    range = 0..59
+                )
+            }
+        }
+    )
+}
+
+@Composable
+private fun TimePickerRow(
+    label: String,
+    value: Int,
+    onValueChange: (Int) -> Unit,
+    range: IntRange
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.width(40.dp)
+        )
+        TextField(
+            value = value.toString().padStart(2, '0'),
+            onValueChange = { raw ->
+                val filtered = raw.filter { it.isDigit() }.take(2)
+                val parsed = filtered.toIntOrNull()
+                if (parsed != null && parsed in range) {
+                    onValueChange(parsed)
+                }
+            },
+            modifier = Modifier.width(90.dp),
+            singleLine = true,
+            textStyle = MaterialTheme.typography.titleMedium,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            colors = TextFieldDefaults.colors(
+                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                focusedIndicatorColor = Color.Transparent,
+                unfocusedIndicatorColor = Color.Transparent
+            )
+        )
+        Spacer(modifier = Modifier.width(10.dp))
+        TimeAdjuster(
+            onMinus = {
+                val newValue = if (value - 1 < range.first) range.last else value - 1
+                onValueChange(newValue)
+            },
+            onPlus = {
+                val newValue = if (value + 1 > range.last) range.first else value + 1
+                onValueChange(newValue)
+            }
+        )
+    }
+}
+
+@Composable
+private fun TimeAdjuster(
+    onMinus: () -> Unit,
+    onPlus: () -> Unit
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        IconButton(onClick = onMinus, modifier = Modifier.size(28.dp)) {
+            Icon(Icons.Default.Remove, contentDescription = "Umanji")
+        }
+        IconButton(onClick = onPlus, modifier = Modifier.size(28.dp)) {
+            Icon(Icons.Default.Add, contentDescription = "Uvecaj")
+        }
+    }
+}
+
+private fun applyTimeIfNeeded(
+    baseUtcMillis: Long,
+    hasTime: Boolean,
+    hours: Int,
+    minutes: Int
+): Long {
+    if (!hasTime) return baseUtcMillis
+    val utcCal = Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC")).apply {
+        timeInMillis = baseUtcMillis
+    }
+    val year = utcCal.get(Calendar.YEAR)
+    val month = utcCal.get(Calendar.MONTH)
+    val day = utcCal.get(Calendar.DAY_OF_MONTH)
+    val localCal = Calendar.getInstance().apply {
+        set(Calendar.YEAR, year)
+        set(Calendar.MONTH, month)
+        set(Calendar.DAY_OF_MONTH, day)
+        set(Calendar.HOUR_OF_DAY, hours)
+        set(Calendar.MINUTE, minutes)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }
+    return localCal.timeInMillis
+}
+
+private fun formatDateTime(
+    millis: Long?,
+    hasTime: Boolean,
+    dateFormat: SimpleDateFormat,
+    dateTimeFormat: SimpleDateFormat
+): String? {
+    if (millis == null) return null
+    return if (hasTime) dateTimeFormat.format(Date(millis)) else dateFormat.format(Date(millis))
 }
 
 /**

@@ -17,7 +17,7 @@ class CalendarViewModel @Inject constructor(
     private val taskRepository: TaskRepository
 ) : ViewModel() {
 
-    val allTasksWithDeadline: StateFlow<List<Task>> = taskRepository.getTasksWithDeadline()
+    val allTasksWithDate: StateFlow<List<Task>> = taskRepository.getTasksWithDate()
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),

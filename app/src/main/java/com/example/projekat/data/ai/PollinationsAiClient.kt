@@ -41,7 +41,7 @@ class PollinationsAiClient @Inject constructor() {
     /**
      * Generate an AI-optimized schedule for the given tasks.
      * 
-     * @param tasks List of tasks with name, priority, and deadline
+     * @param tasks List of tasks with name, priority, and date
      * @return List of scheduled tasks with suggested dates
      * @throws Exception if the API call fails or response is invalid
      */
@@ -75,7 +75,7 @@ class PollinationsAiClient @Inject constructor() {
      */
     private fun buildPrompt(tasks: List<TaskItem>): String {
         val taskListText = tasks.mapIndexed { index, task ->
-            "${index + 1}. \"${task.name}\" - prioritet: ${task.priority}, krajnji rok: ${task.deadline}"
+            "${index + 1}. \"${task.name}\" - prioritet: ${task.priority}, datum: ${task.deadline}"
         }.joinToString("\n")
 
         val calendar = Calendar.getInstance()
@@ -95,7 +95,7 @@ Pravila za raspored:
 - HIGH prioritet: zavrsi sto pre (najblize sutrasnjim datumu $tomorrow)
 - MEDIUM prioritet: rasporedi ravnomerno izmedju $tomorrow i krajnjeg roka
 - LOW prioritet: moze da saceka ali mora biti pre krajnjeg roka
-- Svaki scheduledDate mora biti izmedju $tomorrow i krajnjeg roka taska (ukljucivo)
+        - Svaki scheduledDate mora biti izmedju $tomorrow i datuma taska (ukljucivo)
 - Ne stavljaj previse taskova na isti dan
 
 Odgovori SAMO sa JSON nizom, bez ikakvog dodatnog teksta, objasnjenja ili markdown formatiranja.
@@ -160,14 +160,14 @@ Mora biti niz sa ${tasks.size} elemenata, po jedan za svaki task.
                 else -> throw Exception("Unexpected JSON element type")
             }
 
-            // If we got fewer results than tasks, fill in missing ones with deadline fallback
+            // If we got fewer results than tasks, fill in missing ones with date fallback
             return fillMissingTasks(taskList, originalTasks)
 
         } catch (e: Exception) {
             Log.e(TAG, "Failed to parse AI response: ${e.message}")
             Log.e(TAG, "Raw response: $responseText")
 
-            // Fallback: return original tasks with their deadlines
+            // Fallback: return original tasks with their dates
             return originalTasks.map { task ->
                 ScheduledTask(
                     name = task.name,
@@ -203,7 +203,7 @@ Mora biti niz sa ${tasks.size} elemenata, po jedan za svaki task.
     }
 
     /**
-     * Fill in missing tasks with their original deadlines.
+     * Fill in missing tasks with their original dates.
      */
     private fun fillMissingTasks(
         taskList: List<ScheduledTask>,

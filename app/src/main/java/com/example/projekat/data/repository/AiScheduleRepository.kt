@@ -17,7 +17,7 @@ class AiScheduleRepository @Inject constructor(
 
     /**
      * Sends tasks to the AI service and returns a list of (taskId -> scheduledDate) pairs.
-     * Only tasks with a deadline and IN_PROGRESS status are sent.
+     * Only tasks with a start date and IN_PROGRESS status are sent.
      */
     suspend fun requestSchedule(tasks: List<Task>): Result<List<ScheduleResult>> {
         return try {
@@ -26,7 +26,7 @@ class AiScheduleRepository @Inject constructor(
                 TaskItem(
                     name = task.title,
                     priority = task.priority.name,
-                    deadline = formatDeadline(task.deadline)
+                    deadline = formatDeadline(task.startDate)
                 )
             }
 
@@ -47,8 +47,8 @@ class AiScheduleRepository @Inject constructor(
                 ScheduleResult(
                     taskId = task.id,
                     taskName = task.title,
-                    scheduledDate = scheduled?.scheduledDate ?: formatDeadline(task.deadline),
-                    originalDeadline = formatDeadline(task.deadline)
+                    scheduledDate = scheduled?.scheduledDate ?: formatDeadline(task.startDate),
+                    originalDeadline = formatDeadline(task.startDate)
                 )
             }
 

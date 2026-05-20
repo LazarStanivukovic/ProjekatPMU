@@ -15,6 +15,14 @@ enum class TaskPriority {
     LOW
 }
 
+enum class RepeatInterval {
+    NONE,
+    DAILY,
+    WEEKLY,
+    MONTHLY,
+    YEARLY
+}
+
 @Entity(tableName = "tasks")
 data class Task(
     @PrimaryKey
@@ -23,7 +31,14 @@ data class Task(
     val description: String = "",
     val status: TaskStatus = TaskStatus.IN_PROGRESS,
     val priority: TaskPriority = TaskPriority.MEDIUM,
-    val deadline: Long? = null,
+    // Date range / time fields
+    val startDate: Long? = null,
+    val endDate: Long? = null,
+    val hasTime: Boolean = false,
+    // Repeating task fields
+    val repeatInterval: RepeatInterval = RepeatInterval.NONE,
+    val repeatEndDate: Long? = null,
+    val lastCompletedAt: Long? = null,
     val noteId: String? = null,
     val colorIndex: Int = 0,
     val checklistItems: List<ChecklistItem> = emptyList(),

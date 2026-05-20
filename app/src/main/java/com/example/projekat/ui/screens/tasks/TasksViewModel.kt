@@ -2,6 +2,7 @@ package com.example.projekat.ui.screens.tasks
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.projekat.data.model.RepeatInterval
 import com.example.projekat.data.model.Task
 import com.example.projekat.data.model.TaskStatus
 import com.example.projekat.data.repository.AiScheduleRepository
@@ -68,37 +69,109 @@ class TasksViewModel @Inject constructor(
 
     fun toggleTaskStatus(task: Task) {
         viewModelScope.launch {
-            taskRepository.toggleTaskStatus(task)
             val newStatus = when (task.status) {
                 TaskStatus.IN_PROGRESS -> TaskStatus.COMPLETED
                 TaskStatus.COMPLETED -> TaskStatus.IN_PROGRESS
             }
-            if (newStatus == TaskStatus.COMPLETED) {
-                // Cancel deadline notification
-                deadlineScheduler.cancelDeadlineNotification(task.id)
-                // Remove geofence when task is completed
-                geofenceManager.removeGeofenceForTask(task.id)
-            } else {
-                // Re-schedule deadline notification
-                if (task.deadline != null) {
-                    deadlineScheduler.scheduleDeadlineNotification(
-                        task.id,
-                        task.title,
-                        task.deadline
-                    )
+            
+            if (newStatus == TaskStatus.COMPLETED && task.repeatInterval != RepeatInterval.NONE) {
+                // Repeating task logic
+                val nextStartDate = calculateNextDate(task.startDate, task.repeatInterval)
+                val nextEndDate = calculateNextDate(task.endDate, task.repeatInterval)
+                
+                val shouldCreateNext = if (task.repeatEndDate != null && nextStartDate != null) {
+                    nextStartDate <= task.repeatEndDate
+                } else {
+                    true
                 }
-                // Re-add geofence when task is moved back to in-progress
-                if (task.locationLat != null && task.locationLng != null) {
-                    geofenceManager.addGeofenceForTask(
-                        task.id,
-                        task.title,
-                        task.locationLat,
-                        task.locationLng,
-                        task.locationRadius
+
+                if (shouldCreateNext) {
+                    val nextTask = task.copy(
+                        id = java.util.UUID.randomUUID().toString(),
+                        status = TaskStatus.IN_PROGRESS,
+                        startDate = nextStartDate,
+                        endDate = nextEndDate,
+                        lastCompletedAt = null,
+                        createdAt = System.currentTimeMillis(),
+                        updatedAt = System.currentTimeMillis()
                     )
+                    taskRepository.insertTask(nextTask)
+                    
+                    // Schedule notification for new task
+                    if (nextTask.startDate != null) {
+                        deadlineScheduler.scheduleDeadlineNotification(
+                            nextTask.id,
+                            nextTask.title,
+                            nextTask.startDate,
+                            nextTask.hasTime
+                        )
+                    }
+                    if (nextTask.locationLat != null && nextTask.locationLng != null) {
+                        geofenceManager.addGeofenceForTask(
+                            nextTask.id,
+                            nextTask.title,
+                            nextTask.locationLat,
+                            nextTask.locationLng,
+                            nextTask.locationRadius
+                        )
+                    }
+                }
+                
+                // Update current task to completed
+                val completedTask = task.copy(
+                    status = TaskStatus.COMPLETED,
+                    lastCompletedAt = System.currentTimeMillis(),
+                    updatedAt = System.currentTimeMillis()
+                )
+                taskRepository.updateTask(completedTask)
+                
+                deadlineScheduler.cancelDeadlineNotification(completedTask.id)
+                geofenceManager.removeGeofenceForTask(completedTask.id)
+            } else {
+                // Normal toggle logic
+                val updatedTask = task.copy(
+                    status = newStatus,
+                    updatedAt = System.currentTimeMillis()
+                )
+                taskRepository.updateTask(updatedTask)
+
+                if (newStatus == TaskStatus.COMPLETED) {
+                    deadlineScheduler.cancelDeadlineNotification(task.id)
+                    geofenceManager.removeGeofenceForTask(task.id)
+                } else {
+                    if (updatedTask.startDate != null) {
+                        deadlineScheduler.scheduleDeadlineNotification(
+                            updatedTask.id,
+                            updatedTask.title,
+                            updatedTask.startDate,
+                            updatedTask.hasTime
+                        )
+                    }
+                    if (updatedTask.locationLat != null && updatedTask.locationLng != null) {
+                        geofenceManager.addGeofenceForTask(
+                            updatedTask.id,
+                            updatedTask.title,
+                            updatedTask.locationLat,
+                            updatedTask.locationLng,
+                            updatedTask.locationRadius
+                        )
+                    }
                 }
             }
         }
+    }
+
+    private fun calculateNextDate(currentMillis: Long?, interval: RepeatInterval): Long? {
+        if (currentMillis == null) return null
+        val cal = Calendar.getInstance().apply { timeInMillis = currentMillis }
+        when (interval) {
+            RepeatInterval.DAILY -> cal.add(Calendar.DAY_OF_YEAR, 1)
+            RepeatInterval.WEEKLY -> cal.add(Calendar.WEEK_OF_YEAR, 1)
+            RepeatInterval.MONTHLY -> cal.add(Calendar.MONTH, 1)
+            RepeatInterval.YEARLY -> cal.add(Calendar.YEAR, 1)
+            RepeatInterval.NONE -> return currentMillis
+        }
+        return cal.timeInMillis
     }
 
     fun deleteTask(task: Task) {
@@ -114,7 +187,7 @@ class TasksViewModel @Inject constructor(
 
     /**
      * Returns the start of tomorrow (midnight) in milliseconds.
-     * Tasks must have a deadline >= this value to be eligible for AI scheduling.
+     * Tasks must have a start date >= this value to be eligible for AI scheduling.
      */
     private fun startOfTomorrow(): Long {
         val cal = Calendar.getInstance().apply {
@@ -130,13 +203,13 @@ class TasksViewModel @Inject constructor(
     /**
      * Check if a task is eligible for AI scheduling:
      * - must be IN_PROGRESS
-     * - must have a deadline
-     * - deadline must be tomorrow or later
+     * - must have a start date
+     * - start date must be tomorrow or later
      */
     fun isTaskEligibleForAi(task: Task): Boolean {
         return task.status == TaskStatus.IN_PROGRESS &&
-                task.deadline != null &&
-                task.deadline >= startOfTomorrow()
+                task.startDate != null &&
+                task.startDate >= startOfTomorrow()
     }
 
     /**
@@ -181,10 +254,10 @@ class TasksViewModel @Inject constructor(
         if (selectedIds.isEmpty()) return
 
         val tasks = uiState.value.tasks.filter { it.id in selectedIds }
-        // Only tasks with deadlines can be scheduled
-        val schedulableTasks = tasks.filter { it.deadline != null }
+        // Only tasks with start dates can be scheduled
+        val schedulableTasks = tasks.filter { it.startDate != null }
         if (schedulableTasks.isEmpty()) {
-            _aiState.update { it.copy(error = "Izabrani taskovi nemaju rokove.") }
+            _aiState.update { it.copy(error = "Izabrani taskovi nemaju datume.") }
             return
         }
 
@@ -217,7 +290,7 @@ class TasksViewModel @Inject constructor(
     }
 
     /**
-     * Apply AI-suggested scheduled dates to tasks (overwrite deadlines with scheduled dates).
+     * Apply AI-suggested scheduled dates to tasks (overwrite dates with scheduled dates).
      */
     fun applySchedule() {
         val results = _aiState.value.results ?: return
@@ -229,15 +302,18 @@ class TasksViewModel @Inject constructor(
                 try {
                     val scheduledDate = dateFormat.parse(scheduleResult.scheduledDate) ?: continue
                     val updatedTask = task.copy(
-                        deadline = scheduledDate.time,
+                        startDate = scheduledDate.time,
+                        endDate = null,
+                        hasTime = false,
                         updatedAt = System.currentTimeMillis()
                     )
                     taskRepository.updateTask(updatedTask)
-                    // Re-schedule notification for the new deadline
+                    // Re-schedule notification for the new date
                     deadlineScheduler.scheduleDeadlineNotification(
                         updatedTask.id,
                         updatedTask.title,
-                        updatedTask.deadline!!
+                        updatedTask.startDate!!,
+                        updatedTask.hasTime
                     )
                 } catch (_: Exception) {
                     // Skip tasks with unparseable dates

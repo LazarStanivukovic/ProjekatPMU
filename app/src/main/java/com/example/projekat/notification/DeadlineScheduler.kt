@@ -52,24 +52,28 @@ class DeadlineScheduler @Inject constructor(
     }
 
     /**
-     * Schedule notifications for a task deadline:
-     * 1. A reminder notification at 9:00 AM local time the day before the deadline
+     * Schedule notifications for a task date:
+     * 1. A reminder notification at 9:00 AM local time the day before the date
      *    ("Sutra istice rok za ...")
-     * 2. The main notification at 9:00 AM local time on the deadline day
+     * 2. The main notification at 9:00 AM local time on the date day
      *    ("Danas istice rok za ...")
      *
-     * If the reminder time has already passed, only the deadline-day notification is scheduled.
-     * If both times have passed, the deadline notification fires immediately.
+     * If the reminder time has already passed, only the date-day notification is scheduled.
+     * If both times have passed, the date notification fires immediately.
      */
-    fun scheduleDeadlineNotification(taskId: String, taskTitle: String, deadlineMillis: Long) {
+    fun scheduleDeadlineNotification(taskId: String, taskTitle: String, startMillis: Long, hasTime: Boolean) {
         val now = System.currentTimeMillis()
         val wm = WorkManager.getInstance(context)
 
-        // Convert UTC midnight deadline to local 9:00 AM on deadline day
-        val deadlineLocal9AM = toLocal9AM(deadlineMillis)
+        val notificationBaseTime = if (hasTime) {
+            startMillis
+        } else {
+            // Convert UTC midnight date to local 9:00 AM on date day
+            toLocal9AM(startMillis)
+        }
 
-        // 1. Schedule reminder (9:00 AM local time, day before deadline)
-        val reminderTime = deadlineLocal9AM - ONE_DAY_MS
+        // 1. Schedule reminder (9:00 AM local time, day before date)
+        val reminderTime = notificationBaseTime - ONE_DAY_MS
         if (reminderTime > now) {
             val reminderDelay = reminderTime - now
             val reminderData = Data.Builder()
@@ -93,8 +97,8 @@ class DeadlineScheduler @Inject constructor(
             wm.cancelUniqueWork(getReminderWorkName(taskId))
         }
 
-        // 2. Schedule deadline-day notification (9:00 AM local time on deadline day)
-        val expiryDelay = deadlineLocal9AM - now
+        // 2. Schedule date-day notification (9:00 AM local time on date day)
+        val expiryDelay = notificationBaseTime - now
         val actualDelay = if (expiryDelay > 0) expiryDelay else 0L
 
         val expiryData = Data.Builder()
@@ -116,8 +120,8 @@ class DeadlineScheduler @Inject constructor(
     }
 
     /**
-     * Cancel all scheduled deadline notifications (reminder + expiry) for a task.
-     * Called when: deadline is removed, task is completed, or task is deleted.
+     * Cancel all scheduled date notifications (reminder + expiry) for a task.
+     * Called when: date is removed, task is completed, or task is deleted.
      */
     fun cancelDeadlineNotification(taskId: String) {
         val wm = WorkManager.getInstance(context)
@@ -125,6 +129,6 @@ class DeadlineScheduler @Inject constructor(
         wm.cancelUniqueWork(getExpiryWorkName(taskId))
     }
 
-    private fun getReminderWorkName(taskId: String): String = "deadline_reminder_$taskId"
-    private fun getExpiryWorkName(taskId: String): String = "deadline_expiry_$taskId"
+    private fun getReminderWorkName(taskId: String): String = "date_reminder_$taskId"
+    private fun getExpiryWorkName(taskId: String): String = "date_expiry_$taskId"
 }

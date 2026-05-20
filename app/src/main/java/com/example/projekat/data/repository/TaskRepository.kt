@@ -16,7 +16,7 @@ class TaskRepository @Inject constructor(
 
     fun getTasksByStatus(status: TaskStatus): Flow<List<Task>> = taskDao.getTasksByStatus(status)
 
-    fun getTasksWithDeadline(): Flow<List<Task>> = taskDao.getTasksWithDeadline()
+    fun getTasksWithDate(): Flow<List<Task>> = taskDao.getTasksWithDate()
 
     fun getTasksForDay(startOfDay: Long, endOfDay: Long): Flow<List<Task>> =
         taskDao.getTasksForDay(startOfDay, endOfDay)

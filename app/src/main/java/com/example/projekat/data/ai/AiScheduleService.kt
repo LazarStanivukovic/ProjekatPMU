@@ -34,7 +34,7 @@ class AiScheduleService @Inject constructor(
 
                 Log.d(TAG, "Requesting schedule for ${tasks.size} tasks")
                 tasks.forEach { task ->
-                    Log.d(TAG, "  - ${task.name} (${task.priority}, deadline: ${task.deadline})")
+                    Log.d(TAG, "  - ${task.name} (${task.priority}, date: ${task.deadline})")
                 }
 
                 // Call AI client

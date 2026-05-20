@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.projekat.data.model.ChecklistItem
 import com.example.projekat.data.model.Note
+import com.example.projekat.data.model.RepeatInterval
 import com.example.projekat.data.model.Task
 import com.example.projekat.data.model.TaskPriority
 import com.example.projekat.data.model.TaskStatus
@@ -30,7 +31,11 @@ data class TaskDetailUiState(
     val description: String = "",
     val status: TaskStatus = TaskStatus.IN_PROGRESS,
     val priority: TaskPriority = TaskPriority.MEDIUM,
-    val deadline: Long? = null,
+    val startDate: Long? = null,
+    val endDate: Long? = null,
+    val hasTime: Boolean = false,
+    val repeatInterval: RepeatInterval = RepeatInterval.NONE,
+    val repeatEndDate: Long? = null,
     val noteId: String? = null,
     val attachedNote: Note? = null,
     val colorIndex: Int = 0,
@@ -100,7 +105,11 @@ class TaskDetailViewModel @Inject constructor(
                 description = task.description,
                 status = task.status,
                 priority = task.priority,
-                deadline = task.deadline,
+                startDate = task.startDate,
+                endDate = task.endDate,
+                hasTime = task.hasTime,
+                repeatInterval = task.repeatInterval,
+                repeatEndDate = task.repeatEndDate,
                 noteId = task.noteId,
                 attachedNote = attachedNote,
                 colorIndex = task.colorIndex,
@@ -138,26 +147,99 @@ class TaskDetailViewModel @Inject constructor(
 
     fun updateStatus(status: TaskStatus) {
         _uiState.value = _uiState.value.copy(status = status)
-        // If task is completed, cancel any pending deadline notification
+        // If task is completed, cancel any pending date notification
         if (status == TaskStatus.COMPLETED) {
             persistedTaskId?.let { deadlineScheduler.cancelDeadlineNotification(it) }
         } else {
-            // If task is moved back to in-progress and has a deadline, re-schedule
-            val deadline = _uiState.value.deadline
-            if (deadline != null && persistedTaskId != null) {
+            // If task is moved back to in-progress and has a date, re-schedule
+            val startDate = _uiState.value.startDate
+            if (startDate != null && persistedTaskId != null) {
                 deadlineScheduler.scheduleDeadlineNotification(
                     persistedTaskId!!,
                     _uiState.value.title,
-                    deadline
+                    startDate,
+                    _uiState.value.hasTime
                 )
             }
         }
         scheduleAutoSave()
     }
 
-    fun updateDeadline(deadline: Long?) {
-        _uiState.value = _uiState.value.copy(deadline = deadline)
+    fun updateStartDate(startDate: Long?) {
+        val adjustedStartDate = if (startDate != null && !_uiState.value.hasTime) {
+            normalizeToUtcMidnight(startDate)
+        } else {
+            startDate
+        }
+        val adjustedEndDate = _uiState.value.endDate?.let { endDate ->
+            if (adjustedStartDate != null && endDate < adjustedStartDate) adjustedStartDate else endDate
+        }
+        _uiState.value = _uiState.value.copy(
+            startDate = adjustedStartDate,
+            endDate = adjustedEndDate
+        )
         scheduleAutoSave()
+    }
+
+    fun updateEndDate(endDate: Long?) {
+        val adjustedEndDate = if (endDate != null && !_uiState.value.hasTime) {
+            normalizeToUtcMidnight(endDate)
+        } else {
+            endDate
+        }
+        val adjustedStartDate = _uiState.value.startDate?.let { startDate ->
+            if (adjustedEndDate != null && startDate > adjustedEndDate) adjustedEndDate else startDate
+        }
+        _uiState.value = _uiState.value.copy(
+            startDate = adjustedStartDate,
+            endDate = adjustedEndDate
+        )
+        scheduleAutoSave()
+    }
+
+    fun updateHasTime(hasTime: Boolean) {
+        val sanitizedStartDate = if (hasTime) {
+            _uiState.value.startDate
+        } else {
+            _uiState.value.startDate?.let { normalizeToUtcMidnight(it) }
+        }
+        val sanitizedEndDate = if (hasTime) {
+            _uiState.value.endDate
+        } else {
+            _uiState.value.endDate?.let { normalizeToUtcMidnight(it) }
+        }
+        _uiState.value = _uiState.value.copy(
+            hasTime = hasTime,
+            startDate = sanitizedStartDate,
+            endDate = sanitizedEndDate
+        )
+        scheduleAutoSave()
+    }
+
+    fun updateRepeatInterval(interval: RepeatInterval) {
+        _uiState.value = _uiState.value.copy(repeatInterval = interval)
+        scheduleAutoSave()
+    }
+
+    fun updateRepeatEndDate(endDate: Long?) {
+        val adjustedEndDate = if (endDate != null && !_uiState.value.hasTime) {
+            normalizeToUtcMidnight(endDate)
+        } else {
+            endDate
+        }
+        _uiState.value = _uiState.value.copy(repeatEndDate = adjustedEndDate)
+        scheduleAutoSave()
+    }
+
+    private fun normalizeToUtcMidnight(timeMillis: Long): Long {
+        val utcCal = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC")).apply {
+            timeInMillis = timeMillis
+            set(java.util.Calendar.HOUR_OF_DAY, 0)
+            set(java.util.Calendar.MINUTE, 0)
+            set(java.util.Calendar.SECOND, 0)
+            set(java.util.Calendar.MILLISECOND, 0)
+        }
+        return utcCal.timeInMillis
     }
 
     fun updatePriority(priority: TaskPriority) {
@@ -275,7 +357,11 @@ class TaskDetailViewModel @Inject constructor(
                 description = state.description,
                 status = state.status,
                 priority = state.priority,
-                deadline = state.deadline,
+                startDate = state.startDate,
+                endDate = state.endDate,
+                hasTime = state.hasTime,
+                repeatInterval = state.repeatInterval,
+                repeatEndDate = state.repeatEndDate,
                 noteId = state.noteId,
                 colorIndex = state.colorIndex,
                 checklistItems = state.checklistItems,
@@ -291,12 +377,13 @@ class TaskDetailViewModel @Inject constructor(
             _uiState.value = state.copy(id = task.id, isNew = false, hasUnsavedChanges = false)
             // Note: We don't update originalState here - it stays as the initial state
 
-            // Schedule notification for new task with deadline
-            if (state.deadline != null && state.status == TaskStatus.IN_PROGRESS) {
+            // Schedule notification for new task with start date
+            if (state.startDate != null && state.status == TaskStatus.IN_PROGRESS) {
                 deadlineScheduler.scheduleDeadlineNotification(
                     task.id,
                     state.title,
-                    state.deadline
+                    state.startDate,
+                    state.hasTime
                 )
             }
 
@@ -318,7 +405,11 @@ class TaskDetailViewModel @Inject constructor(
                     description = state.description,
                     status = state.status,
                     priority = state.priority,
-                    deadline = state.deadline,
+                    startDate = state.startDate,
+                    endDate = state.endDate,
+                    hasTime = state.hasTime,
+                    repeatInterval = state.repeatInterval,
+                    repeatEndDate = state.repeatEndDate,
                     noteId = state.noteId,
                     colorIndex = state.colorIndex,
                     checklistItems = state.checklistItems,
@@ -331,15 +422,16 @@ class TaskDetailViewModel @Inject constructor(
             _uiState.value = state.copy(hasUnsavedChanges = false)
             // Note: We don't update originalState here - it stays as the initial state
 
-            // Update deadline notification scheduling
-            if (state.deadline != null && state.status == TaskStatus.IN_PROGRESS) {
+            // Update date notification scheduling
+            if (state.startDate != null && state.status == TaskStatus.IN_PROGRESS) {
                 deadlineScheduler.scheduleDeadlineNotification(
                     persistedTaskId!!,
                     state.title,
-                    state.deadline
+                    state.startDate,
+                    state.hasTime
                 )
             } else {
-                // No deadline or task completed — cancel notification
+                // No date or task completed — cancel notification
                 deadlineScheduler.cancelDeadlineNotification(persistedTaskId!!)
             }
 
@@ -363,7 +455,7 @@ class TaskDetailViewModel @Inject constructor(
         viewModelScope.launch {
             autoSaveJob?.cancel()
             persistedTaskId?.let { taskId ->
-                // Cancel any pending deadline notification before deleting
+                // Cancel any pending date notification before deleting
                 deadlineScheduler.cancelDeadlineNotification(taskId)
                 // Remove geofence before deleting
                 geofenceManager.removeGeofenceForTask(taskId)
@@ -418,7 +510,11 @@ class TaskDetailViewModel @Inject constructor(
                                 description = original.description,
                                 status = original.status,
                                 priority = original.priority,
-                                deadline = original.deadline,
+                                startDate = original.startDate,
+                                endDate = original.endDate,
+                                hasTime = original.hasTime,
+                                repeatInterval = original.repeatInterval,
+                                repeatEndDate = original.repeatEndDate,
                                 noteId = original.noteId,
                                 colorIndex = original.colorIndex,
                                 checklistItems = original.checklistItems,
@@ -456,7 +552,11 @@ class TaskDetailViewModel @Inject constructor(
                original.description != current.description ||
                original.status != current.status ||
                original.priority != current.priority ||
-               original.deadline != current.deadline ||
+               original.startDate != current.startDate ||
+               original.endDate != current.endDate ||
+               original.hasTime != current.hasTime ||
+               original.repeatInterval != current.repeatInterval ||
+               original.repeatEndDate != current.repeatEndDate ||
                original.noteId != current.noteId ||
                original.colorIndex != current.colorIndex ||
                original.checklistItems != current.checklistItems ||

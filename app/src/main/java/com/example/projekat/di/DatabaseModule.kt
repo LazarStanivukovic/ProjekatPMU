@@ -9,6 +9,7 @@ import com.example.projekat.data.local.MIGRATION_3_4
 import com.example.projekat.data.local.MIGRATION_4_5
 import com.example.projekat.data.local.MIGRATION_5_6
 import com.example.projekat.data.local.MIGRATION_6_7
+import com.example.projekat.data.local.MIGRATION_7_8
 import com.example.projekat.data.local.NoteDao
 import com.example.projekat.data.local.TaskDao
 import dagger.Module
@@ -32,7 +33,8 @@ object DatabaseModule {
         )
             .addMigrations(
                 MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4,
-                MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7
+                MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7,
+                MIGRATION_7_8
             )
             .build()
     }

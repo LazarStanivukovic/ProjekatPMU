@@ -32,9 +32,9 @@ class DeadlineWorker @AssistedInject constructor(
         val taskTitle = inputData.getString(KEY_TASK_TITLE) ?: "Task"
         val isReminder = inputData.getBoolean(KEY_IS_REMINDER, false)
 
-        // Verify task still exists and is still in progress with a deadline
+        // Verify task still exists and is still in progress with a date
         val task = taskRepository.getTaskById(taskId)
-        if (task == null || task.status == TaskStatus.COMPLETED || task.deadline == null) {
+        if (task == null || task.status == TaskStatus.COMPLETED || task.startDate == null) {
             return Result.success()
         }
 

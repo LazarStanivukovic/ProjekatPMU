@@ -20,10 +20,18 @@ interface TaskDao {
     @Query("SELECT * FROM tasks WHERE status = :status AND syncStatus != 'PENDING_DELETE' ORDER BY createdAt DESC")
     fun getTasksByStatus(status: TaskStatus): Flow<List<Task>>
 
-    @Query("SELECT * FROM tasks WHERE deadline IS NOT NULL AND syncStatus != 'PENDING_DELETE' ORDER BY deadline ASC")
-    fun getTasksWithDeadline(): Flow<List<Task>>
+    @Query("SELECT * FROM tasks WHERE (startDate IS NOT NULL OR endDate IS NOT NULL) AND syncStatus != 'PENDING_DELETE' ORDER BY COALESCE(endDate, startDate) ASC")
+    fun getTasksWithDate(): Flow<List<Task>>
 
-    @Query("SELECT * FROM tasks WHERE deadline BETWEEN :startOfDay AND :endOfDay AND syncStatus != 'PENDING_DELETE' ORDER BY deadline ASC")
+    @Query(
+        "SELECT * FROM tasks WHERE syncStatus != 'PENDING_DELETE' AND startDate IS NOT NULL " +
+        "AND (" +
+        "(startDate BETWEEN :startOfDay AND :endOfDay) " +
+        "OR (endDate BETWEEN :startOfDay AND :endOfDay) " +
+        "OR (startDate <= :startOfDay AND endDate >= :endOfDay)" +
+        ") " +
+        "ORDER BY COALESCE(endDate, startDate) ASC"
+    )
     fun getTasksForDay(startOfDay: Long, endOfDay: Long): Flow<List<Task>>
 
     @Query("SELECT * FROM tasks WHERE id = :taskId")

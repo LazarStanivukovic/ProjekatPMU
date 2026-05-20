@@ -386,9 +386,11 @@ fun TaskCard(
 ) {
     val isDark = isSystemInDarkTheme()
     val dateFormat = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
+    val dateTimeFormat = SimpleDateFormat("dd MMM yyyy HH:mm", Locale.getDefault())
     val isCompleted = task.status == TaskStatus.COMPLETED
-    val isOverdue = task.deadline != null &&
-            task.deadline < System.currentTimeMillis() &&
+    val primaryDate = task.endDate ?: task.startDate
+    val isOverdue = primaryDate != null &&
+            primaryDate < System.currentTimeMillis() &&
             task.status != TaskStatus.COMPLETED
 
     val statusColor = when {
@@ -489,7 +491,7 @@ fun TaskCard(
                     )
                 }
 
-                // Priority + deadline row
+                // Priority + date row
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     val priorityColor = when (task.priority) {
@@ -516,7 +518,7 @@ fun TaskCard(
                         )
                     }
 
-                    if (task.deadline != null) {
+                    if (task.startDate != null) {
                         Spacer(modifier = Modifier.width(8.dp))
                         Icon(
                             Icons.Default.AccessTime,
@@ -526,7 +528,7 @@ fun TaskCard(
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = dateFormat.format(Date(task.deadline)),
+                            text = formatTaskDateRange(task, dateFormat, dateTimeFormat),
                             style = MaterialTheme.typography.labelSmall,
                             color = statusColor
                         )
@@ -571,6 +573,22 @@ fun TaskCard(
                 }
             }
         }
+    }
+}
+
+private fun formatTaskDateRange(
+    task: Task,
+    dateFormat: SimpleDateFormat,
+    dateTimeFormat: SimpleDateFormat
+): String {
+    val start = task.startDate
+    val end = task.endDate
+    if (start == null) return ""
+    val formatter = if (task.hasTime) dateTimeFormat else dateFormat
+    return if (end != null && end != start) {
+        "${formatter.format(Date(start))} - ${formatter.format(Date(end))}"
+    } else {
+        formatter.format(Date(start))
     }
 }
 
@@ -647,7 +665,7 @@ private fun SchedulePreviewDialog(
                             Row(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                // Original deadline
+                                // Original date
                                 Text(
                                     text = originalDate,
                                     style = MaterialTheme.typography.bodySmall,

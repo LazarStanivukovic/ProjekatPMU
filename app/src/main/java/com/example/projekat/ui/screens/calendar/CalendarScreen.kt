@@ -61,6 +61,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.example.projekat.data.model.RepeatInterval
 import com.example.projekat.data.model.Task
 import com.example.projekat.data.model.TaskStatus
 import com.example.projekat.ui.theme.NoteBlue
@@ -96,27 +97,105 @@ fun CalendarScreen(
     var currentYear by remember { mutableIntStateOf(today.get(Calendar.YEAR)) }
     var selectedDay by remember { mutableIntStateOf(today.get(Calendar.DAY_OF_MONTH)) }
 
-    val allTasks by viewModel.allTasksWithDeadline.collectAsState()
+    val allTasks by viewModel.allTasksWithDate.collectAsState()
 
     // Filter tasks for selected day
     val tasksForDay = allTasks.filter { task ->
-        task.deadline?.let { deadline ->
-            val taskCal = Calendar.getInstance().apply { timeInMillis = deadline }
-            taskCal.get(Calendar.YEAR) == currentYear &&
-                    taskCal.get(Calendar.MONTH) == currentMonth &&
-                    taskCal.get(Calendar.DAY_OF_MONTH) == selectedDay
-        } ?: false
+        val start = task.startDate ?: return@filter false
+        val end = task.endDate
+
+        val dayStart = Calendar.getInstance().apply {
+            set(currentYear, currentMonth, selectedDay, 0, 0, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+        val dayEnd = Calendar.getInstance().apply {
+            set(currentYear, currentMonth, selectedDay, 23, 59, 59)
+            set(Calendar.MILLISECOND, 999)
+        }.timeInMillis
+
+        if (start in dayStart..dayEnd) return@filter true
+        if (end != null && end in dayStart..dayEnd) return@filter true
+
+        if (task.repeatInterval != RepeatInterval.NONE && start < dayStart) {
+            if (task.repeatEndDate != null && dayStart > task.repeatEndDate) return@filter false
+            
+            val startCal = Calendar.getInstance().apply { timeInMillis = start }
+            val targetCal = Calendar.getInstance().apply { timeInMillis = dayStart }
+            
+            return@filter when (task.repeatInterval) {
+                RepeatInterval.DAILY -> true
+                RepeatInterval.WEEKLY -> startCal.get(Calendar.DAY_OF_WEEK) == targetCal.get(Calendar.DAY_OF_WEEK)
+                RepeatInterval.MONTHLY -> startCal.get(Calendar.DAY_OF_MONTH) == targetCal.get(Calendar.DAY_OF_MONTH)
+                RepeatInterval.YEARLY -> startCal.get(Calendar.DAY_OF_MONTH) == targetCal.get(Calendar.DAY_OF_MONTH) && 
+                                         startCal.get(Calendar.MONTH) == targetCal.get(Calendar.MONTH)
+                else -> false
+            }
+        }
+        
+        false
     }
 
     // Days that have tasks
-    val daysWithTasks = allTasks.mapNotNull { task ->
-        task.deadline?.let { deadline ->
-            val taskCal = Calendar.getInstance().apply { timeInMillis = deadline }
-            if (taskCal.get(Calendar.YEAR) == currentYear && taskCal.get(Calendar.MONTH) == currentMonth) {
-                taskCal.get(Calendar.DAY_OF_MONTH)
-            } else null
+    val daysWithTasks = buildSet {
+        val monthStart = Calendar.getInstance().apply {
+            set(currentYear, currentMonth, 1, 0, 0, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+        val monthEnd = Calendar.getInstance().apply {
+            set(currentYear, currentMonth, 1)
+            set(Calendar.DAY_OF_MONTH, getActualMaximum(Calendar.DAY_OF_MONTH))
+            set(Calendar.HOUR_OF_DAY, 23)
+            set(Calendar.MINUTE, 59)
+            set(Calendar.SECOND, 59)
+            set(Calendar.MILLISECOND, 999)
+        }.timeInMillis
+
+        allTasks.forEach { task ->
+            val start = task.startDate ?: return@forEach
+            val end = task.endDate
+
+            if (start in monthStart..monthEnd) {
+                val cal = Calendar.getInstance().apply { timeInMillis = start }
+                add(cal.get(Calendar.DAY_OF_MONTH))
+            }
+
+            if (end != null && end in monthStart..monthEnd) {
+                val cal = Calendar.getInstance().apply { timeInMillis = end }
+                add(cal.get(Calendar.DAY_OF_MONTH))
+            }
+
+            if (task.repeatInterval != RepeatInterval.NONE && start <= monthEnd) {
+                val limit = if (task.repeatEndDate != null) minOf(task.repeatEndDate, monthEnd) else monthEnd
+                if (limit >= monthStart) {
+                    val startCal = Calendar.getInstance().apply { timeInMillis = start }
+                    val daysInMonth = Calendar.getInstance().apply { set(currentYear, currentMonth, 1) }.getActualMaximum(Calendar.DAY_OF_MONTH)
+                    
+                    for (day in 1..daysInMonth) {
+                        val dayStart = Calendar.getInstance().apply {
+                            set(currentYear, currentMonth, day, 0, 0, 0)
+                            set(Calendar.MILLISECOND, 0)
+                        }.timeInMillis
+                        
+                        if (dayStart > limit) break
+                        if (dayStart < start) continue
+                        
+                        val targetCal = Calendar.getInstance().apply { timeInMillis = dayStart }
+                        val matches = when (task.repeatInterval) {
+                            RepeatInterval.DAILY -> true
+                            RepeatInterval.WEEKLY -> startCal.get(Calendar.DAY_OF_WEEK) == targetCal.get(Calendar.DAY_OF_WEEK)
+                            RepeatInterval.MONTHLY -> startCal.get(Calendar.DAY_OF_MONTH) == targetCal.get(Calendar.DAY_OF_MONTH)
+                            RepeatInterval.YEARLY -> startCal.get(Calendar.DAY_OF_MONTH) == targetCal.get(Calendar.DAY_OF_MONTH) && 
+                                                     startCal.get(Calendar.MONTH) == targetCal.get(Calendar.MONTH)
+                            else -> false
+                        }
+                        if (matches) {
+                            add(day)
+                        }
+                    }
+                }
+            }
         }
-    }.toSet()
+    }
 
     val calendarDays = getCalendarDays(currentYear, currentMonth)
 
@@ -397,10 +476,13 @@ private fun CalendarTaskCard(
     modifier: Modifier = Modifier
 ) {
     val isDark = isSystemInDarkTheme()
+    val dateFormat = remember { SimpleDateFormat("dd MMM yyyy", Locale.getDefault()) }
+    val dateTimeFormat = remember { SimpleDateFormat("dd MMM yyyy HH:mm", Locale.getDefault()) }
     var isExpanded by remember { mutableStateOf(false) }
     val isCompleted = task.status == TaskStatus.COMPLETED
-    val isOverdue = task.deadline != null &&
-            task.deadline < System.currentTimeMillis() &&
+    val primaryDate = task.endDate ?: task.startDate
+    val isOverdue = primaryDate != null &&
+            primaryDate < System.currentTimeMillis() &&
             !isCompleted
     val statusColor = when {
         isCompleted -> StatusCompleted
@@ -486,6 +568,31 @@ private fun CalendarTaskCard(
                             )
                         }
                         Spacer(modifier = Modifier.width(8.dp))
+                        val dateLabel = formatTaskDateRange(task, dateFormat, dateTimeFormat)
+                        if (dateLabel.isNotBlank()) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(
+                                    Icons.Default.AccessTime,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(14.dp),
+                                    tint = statusColor
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = dateLabel,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = statusColor,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                        } else {
+                            Spacer(modifier = Modifier.weight(1f))
+                        }
                         Text(
                             text = "Otvori task",
                             style = MaterialTheme.typography.labelSmall,
@@ -497,6 +604,22 @@ private fun CalendarTaskCard(
                 }
             }
         }
+    }
+}
+
+private fun formatTaskDateRange(
+    task: Task,
+    dateFormat: SimpleDateFormat,
+    dateTimeFormat: SimpleDateFormat
+): String {
+    val start = task.startDate
+    val end = task.endDate
+    if (start == null) return ""
+    val formatter = if (task.hasTime) dateTimeFormat else dateFormat
+    return if (end != null && end != start) {
+        "${formatter.format(java.util.Date(start))} - ${formatter.format(java.util.Date(end))}"
+    } else {
+        formatter.format(java.util.Date(start))
     }
 }
 

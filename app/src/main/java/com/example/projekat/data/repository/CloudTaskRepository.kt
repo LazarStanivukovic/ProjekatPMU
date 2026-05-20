@@ -1,6 +1,7 @@
 package com.example.projekat.data.repository
 
 import com.example.projekat.data.model.ChecklistItem
+import com.example.projekat.data.model.RepeatInterval
 import com.example.projekat.data.model.SyncStatus
 import com.example.projekat.data.model.Task
 import com.example.projekat.data.model.TaskPriority
@@ -37,7 +38,12 @@ class CloudTaskRepository @Inject constructor(
                 "description" to task.description,
                 "status" to task.status.name,
                 "priority" to task.priority.name,
-                "deadline" to task.deadline,
+                "startDate" to task.startDate,
+                "endDate" to task.endDate,
+                "hasTime" to task.hasTime,
+                "repeatInterval" to task.repeatInterval.name,
+                "repeatEndDate" to task.repeatEndDate,
+                "lastCompletedAt" to task.lastCompletedAt,
                 "noteId" to task.noteId,
                 "colorIndex" to task.colorIndex,
                 "checklistItems" to task.checklistItems.map { item ->
@@ -132,6 +138,7 @@ class CloudTaskRepository @Inject constructor(
 
         val statusStr = (data["status"] as? String) ?: "IN_PROGRESS"
         val priorityStr = (data["priority"] as? String) ?: "MEDIUM"
+        val repeatIntervalStr = (data["repeatInterval"] as? String) ?: "NONE"
 
         return Task(
             id = (data["id"] as? String) ?: docId,
@@ -139,7 +146,13 @@ class CloudTaskRepository @Inject constructor(
             description = (data["description"] as? String) ?: "",
             status = try { TaskStatus.valueOf(statusStr) } catch (e: Exception) { TaskStatus.IN_PROGRESS },
             priority = try { TaskPriority.valueOf(priorityStr) } catch (e: Exception) { TaskPriority.MEDIUM },
-            deadline = (data["deadline"] as? Number)?.toLong(),
+            startDate = (data["startDate"] as? Number)?.toLong()
+                ?: (data["deadline"] as? Number)?.toLong(),
+            endDate = (data["endDate"] as? Number)?.toLong(),
+            hasTime = (data["hasTime"] as? Boolean) ?: false,
+            repeatInterval = try { RepeatInterval.valueOf(repeatIntervalStr) } catch (e: Exception) { RepeatInterval.NONE },
+            repeatEndDate = (data["repeatEndDate"] as? Number)?.toLong(),
+            lastCompletedAt = (data["lastCompletedAt"] as? Number)?.toLong(),
             noteId = data["noteId"] as? String,
             colorIndex = ((data["colorIndex"] as? Number)?.toInt()) ?: 0,
             checklistItems = checklistItems,
