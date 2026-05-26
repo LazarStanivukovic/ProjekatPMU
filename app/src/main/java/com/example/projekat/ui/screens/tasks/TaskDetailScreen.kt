@@ -39,6 +39,8 @@ import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Repeat
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -149,6 +151,8 @@ fun TaskDetailScreen(
     var showRepeatDropdown by remember { mutableStateOf(false) }
     var timeHours by remember { mutableStateOf(9) }
     var timeMinutes by remember { mutableStateOf(0) }
+    var showShareDialog by remember { mutableStateOf(false) }
+    var shareEmail by remember { mutableStateOf("") }
 
     // Color from the task's colorIndex
     val bgColors = if (isDark) noteColorsDark else noteColorsLight
@@ -319,6 +323,57 @@ fun TaskDetailScreen(
         )
     }
 
+    if (showShareDialog) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = {
+                showShareDialog = false
+                shareEmail = ""
+            },
+            title = { Text("Podeli task") },
+            text = {
+                Column {
+                    Text("Unesite email korisnika sa kojim želite da podelite ovaj task.")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = shareEmail,
+                        onValueChange = { shareEmail = it },
+                        label = { Text("Email adresa") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email)
+                    )
+                    
+                    if (uiState.sharedWith.isNotEmpty() || uiState.pendingInvites.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text("Trenutno podeljeno sa:", style = MaterialTheme.typography.labelMedium)
+                        uiState.sharedWith.forEach { email ->
+                            Text(email, style = MaterialTheme.typography.bodySmall)
+                        }
+                        uiState.pendingInvites.forEach { email ->
+                            Text("$email (Na čekanju)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.shareTask(shareEmail)
+                        showShareDialog = false
+                        shareEmail = ""
+                    }
+                ) { Text("Pošalji") }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showShareDialog = false
+                        shareEmail = ""
+                    }
+                ) { Text("Otkaži") }
+            }
+        )
+    }
+
     SwipeBackContainer(onBack = onBack) {
     Box(
         modifier = Modifier
@@ -344,6 +399,13 @@ fun TaskDetailScreen(
                 }
                 Spacer(modifier = Modifier.weight(1f))
                 if (!uiState.isNew) {
+                    IconButton(onClick = { showShareDialog = true }) {
+                        Icon(
+                            Icons.Default.Share,
+                            contentDescription = "Deli",
+                            tint = iconTint
+                        )
+                    }
                     IconButton(onClick = { viewModel.deleteTask() }) {
                         Icon(
                             Icons.Default.Delete,

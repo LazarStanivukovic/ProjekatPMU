@@ -40,7 +40,10 @@ import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.outlined.CheckBox
 import androidx.compose.material.icons.outlined.CheckBoxOutlineBlank
-import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -56,6 +59,11 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -101,6 +109,7 @@ import java.util.Locale
 private val taskColorsLight = listOf(NoteYellow, NoteGreen, NoteBlue, NotePink, NoteOrange, NotePurple)
 private val taskColorsDark = listOf(NoteYellowDark, NoteGreenDark, NoteBlueDark, NotePinkDark, NoteOrangeDark, NotePurpleDark)
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TasksScreen(
     onTaskClick: (String) -> Unit,
@@ -109,6 +118,8 @@ fun TasksScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
+    var selectedTabIndex by remember { mutableStateOf(0) }
+    val tabs = listOf("Moji Taskovi", "Inbox")
 
     // Show error in snackbar
     LaunchedEffect(uiState.aiError) {
@@ -184,141 +195,206 @@ fun TasksScreen(
                 }
             }
 
-            // Stats row
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                StatCard(
-                    label = "U toku",
-                    count = uiState.inProgressCount,
-                    color = StatusInProgress,
-                    modifier = Modifier.weight(1f)
-                )
-                StatCard(
-                    label = "Zavrseno",
-                    count = uiState.completedCount,
-                    color = StatusCompleted,
-                    modifier = Modifier.weight(1f)
-                )
+            TabRow(selectedTabIndex = selectedTabIndex) {
+                tabs.forEachIndexed { index, title ->
+                    Tab(
+                        selected = selectedTabIndex == index,
+                        onClick = { selectedTabIndex = index },
+                        text = {
+                            if (index == 1 && uiState.pendingInvites.isNotEmpty()) {
+                                BadgedBox(
+                                    badge = {
+                                        Badge {
+                                            Text(uiState.pendingInvites.size.toString())
+                                        }
+                                    }
+                                ) {
+                                    Text(title, modifier = Modifier.padding(end = 12.dp))
+                                }
+                            } else {
+                                Text(title)
+                            }
+                        }
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Selection mode info bar
-            AnimatedVisibility(
-                visible = uiState.isSelectionMode,
-                enter = slideInVertically() + fadeIn(),
-                exit = slideOutVertically() + fadeOut()
-            ) {
-                Column {
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer
-                        )
-                    ) {
-                        Row(
+            if (selectedTabIndex == 0) {
+                // Stats row
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    StatCard(
+                        label = "U toku",
+                        count = uiState.inProgressCount,
+                        color = StatusInProgress,
+                        modifier = Modifier.weight(1f)
+                    )
+                    StatCard(
+                        label = "Zavrseno",
+                        count = uiState.completedCount,
+                        color = StatusCompleted,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Selection mode info bar
+                AnimatedVisibility(
+                    visible = uiState.isSelectionMode,
+                    enter = slideInVertically() + fadeIn(),
+                    exit = slideOutVertically() + fadeOut()
+                ) {
+                    Column {
+                        Card(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                                .padding(horizontal = 16.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.primaryContainer
+                            )
                         ) {
-                            Icon(
-                                Icons.Default.AutoAwesome,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Izabrano: ${uiState.selectedTaskIds.size} taskova",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                modifier = Modifier.weight(1f)
-                            )
-                            Button(
-                                onClick = { viewModel.requestAiSchedule() },
-                                enabled = uiState.selectedTaskIds.isNotEmpty() && !uiState.isAiLoading,
-                                shape = RoundedCornerShape(8.dp),
-                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                if (uiState.isAiLoading) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(16.dp),
-                                        strokeWidth = 2.dp,
-                                        color = MaterialTheme.colorScheme.onPrimary
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text("Generisanje...")
-                                } else {
-                                    Icon(
-                                        Icons.Default.Schedule,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text("Rasporedi")
+                                Icon(
+                                    Icons.Default.AutoAwesome,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Izabrano: ${uiState.selectedTaskIds.size} taskova",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Button(
+                                    onClick = { viewModel.requestAiSchedule() },
+                                    enabled = uiState.selectedTaskIds.isNotEmpty() && !uiState.isAiLoading,
+                                    shape = RoundedCornerShape(8.dp),
+                                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp)
+                                ) {
+                                    if (uiState.isAiLoading) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(16.dp),
+                                            strokeWidth = 2.dp,
+                                            color = MaterialTheme.colorScheme.onPrimary
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text("Generisanje...")
+                                    } else {
+                                        Icon(
+                                            Icons.Default.Schedule,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Rasporedi")
+                                    }
                                 }
                             }
                         }
+                        Spacer(modifier = Modifier.height(8.dp))
                     }
-                    Spacer(modifier = Modifier.height(8.dp))
                 }
-            }
 
-            if (uiState.tasks.isEmpty()) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(
-                            Icons.Outlined.CheckBox,
-                            contentDescription = null,
-                            modifier = Modifier.size(72.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text(
-                            text = "Nema taskova",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                if (uiState.tasks.isEmpty()) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(
+                                Icons.Outlined.CheckBox,
+                                contentDescription = null,
+                                modifier = Modifier.size(72.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(
+                                text = "Nema taskova",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                } else {
+                    LazyColumn(
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        items(uiState.tasks, key = { it.id }) { task ->
+                            TaskCard(
+                                task = task,
+                                onClick = {
+                                    if (uiState.isSelectionMode) {
+                                        if (viewModel.isTaskEligibleForAi(task)) {
+                                            viewModel.toggleTaskSelection(task.id)
+                                        }
+                                    } else {
+                                        onTaskClick(task.id)
+                                    }
+                                },
+                                onToggleStatus = {
+                                    if (!uiState.isSelectionMode) {
+                                        viewModel.toggleTaskStatus(task)
+                                    }
+                                },
+                                isSelectionMode = uiState.isSelectionMode,
+                                isSelected = task.id in uiState.selectedTaskIds,
+                                isEligibleForSelection = viewModel.isTaskEligibleForAi(task)
+                            )
+                        }
                     }
                 }
             } else {
-                LazyColumn(
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    items(uiState.tasks, key = { it.id }) { task ->
-                        TaskCard(
-                            task = task,
-                            onClick = {
-                                if (uiState.isSelectionMode) {
-                                    if (viewModel.isTaskEligibleForAi(task)) {
-                                        viewModel.toggleTaskSelection(task.id)
-                                    }
-                                } else {
-                                    onTaskClick(task.id)
-                                }
-                            },
-                            onToggleStatus = {
-                                if (!uiState.isSelectionMode) {
-                                    viewModel.toggleTaskStatus(task)
-                                }
-                            },
-                            isSelectionMode = uiState.isSelectionMode,
-                            isSelected = task.id in uiState.selectedTaskIds,
-                            isEligibleForSelection = viewModel.isTaskEligibleForAi(task)
-                        )
+                // Inbox / Invites Tab
+                if (uiState.pendingInvites.isEmpty()) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(
+                                Icons.Filled.Notifications,
+                                contentDescription = null,
+                                modifier = Modifier.size(72.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(
+                                text = "Nema novih pozivnica",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                } else {
+                    LazyColumn(
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        items(uiState.pendingInvites, key = { it.id }) { task ->
+                            InviteCard(
+                                task = task,
+                                onAccept = { viewModel.acceptInvite(task) },
+                                onDecline = { viewModel.declineInvite(task) }
+                            )
+                        }
                     }
                 }
             }
@@ -570,6 +646,67 @@ fun TaskCard(
                         color = statusColor,
                         fontWeight = FontWeight.Medium
                     )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun InviteCard(
+    task: Task,
+    onAccept: () -> Unit,
+    onDecline: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Text(
+                text = task.title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+            if (task.description.isNotBlank()) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = task.description,
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Od: ${task.ownerId}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End
+            ) {
+                TextButton(onClick = onDecline) {
+                    Text("Odbij", color = MaterialTheme.colorScheme.error)
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Button(
+                    onClick = onAccept,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = NoteGreenDark
+                    )
+                ) {
+                    Text("Prihvati")
                 }
             }
         }

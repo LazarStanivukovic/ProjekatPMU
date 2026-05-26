@@ -10,6 +10,7 @@ import com.example.projekat.data.repository.ScheduleResult
 import com.example.projekat.data.repository.TaskRepository
 import com.example.projekat.location.GeofenceManager
 import com.example.projekat.notification.DeadlineScheduler
+import com.google.firebase.auth.FirebaseAuth
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -33,7 +34,8 @@ data class TasksUiState(
     val isAiLoading: Boolean = false,
     val aiError: String? = null,
     val scheduleResults: List<ScheduleResult>? = null,
-    val showScheduleDialog: Boolean = false
+    val showScheduleDialog: Boolean = false,
+    val pendingInvites: List<Task> = emptyList()
 )
 
 @HiltViewModel
@@ -41,7 +43,8 @@ class TasksViewModel @Inject constructor(
     private val taskRepository: TaskRepository,
     private val aiScheduleRepository: AiScheduleRepository,
     private val deadlineScheduler: DeadlineScheduler,
-    private val geofenceManager: GeofenceManager
+    private val geofenceManager: GeofenceManager,
+    private val auth: FirebaseAuth
 ) : ViewModel() {
 
     private val _aiState = MutableStateFlow(AiState())
@@ -50,16 +53,21 @@ class TasksViewModel @Inject constructor(
         taskRepository.getAllTasks(),
         _aiState
     ) { tasks, aiState ->
+        val currentUserEmail = auth.currentUser?.email
+        val pendingInvitesList = tasks.filter { it.pendingInvites.contains(currentUserEmail) }
+        val normalTasks = tasks.filter { !it.pendingInvites.contains(currentUserEmail) }
+
         TasksUiState(
-            tasks = tasks,
-            inProgressCount = tasks.count { it.status == TaskStatus.IN_PROGRESS },
-            completedCount = tasks.count { it.status == TaskStatus.COMPLETED },
+            tasks = normalTasks,
+            inProgressCount = normalTasks.count { it.status == TaskStatus.IN_PROGRESS },
+            completedCount = normalTasks.count { it.status == TaskStatus.COMPLETED },
             isSelectionMode = aiState.isSelectionMode,
             selectedTaskIds = aiState.selectedTaskIds,
             isAiLoading = aiState.isLoading,
             aiError = aiState.error,
             scheduleResults = aiState.results,
-            showScheduleDialog = aiState.showDialog
+            showScheduleDialog = aiState.showDialog,
+            pendingInvites = pendingInvitesList
         )
     }.stateIn(
         scope = viewModelScope,
@@ -180,6 +188,32 @@ class TasksViewModel @Inject constructor(
             // Remove geofence when task is deleted
             geofenceManager.removeGeofenceForTask(task.id)
             taskRepository.deleteTask(task)
+        }
+    }
+
+    fun acceptInvite(task: Task) {
+        val email = auth.currentUser?.email ?: return
+        viewModelScope.launch {
+            val updatedPending = task.pendingInvites.filter { it != email }
+            val updatedShared = task.sharedWith + email
+            val updatedTask = task.copy(
+                pendingInvites = updatedPending,
+                sharedWith = updatedShared
+            )
+            taskRepository.updateTask(updatedTask)
+        }
+    }
+
+    fun declineInvite(task: Task) {
+        val email = auth.currentUser?.email ?: return
+        viewModelScope.launch {
+            val updatedPending = task.pendingInvites.filter { it != email }
+            val updatedTask = task.copy(
+                pendingInvites = updatedPending
+            )
+            // If the user declines, they just remove themselves from pendingInvites.
+            // If they are not owner or sharedWith, they will no longer fetch this task from Cloud.
+            taskRepository.updateTask(updatedTask)
         }
     }
 

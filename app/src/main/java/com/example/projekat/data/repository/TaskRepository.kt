@@ -5,12 +5,14 @@ import com.example.projekat.data.model.SyncStatus
 import com.example.projekat.data.model.Task
 import com.example.projekat.data.model.TaskStatus
 import kotlinx.coroutines.flow.Flow
+import com.google.firebase.auth.FirebaseAuth
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 class TaskRepository @Inject constructor(
-    private val taskDao: TaskDao
+    private val taskDao: TaskDao,
+    private val auth: FirebaseAuth
 ) {
     fun getAllTasks(): Flow<List<Task>> = taskDao.getAllTasks()
 
@@ -25,7 +27,14 @@ class TaskRepository @Inject constructor(
 
     suspend fun insertTask(task: Task) {
         // New tasks start as LOCAL_ONLY, will be synced later
-        taskDao.insertTask(task.copy(syncStatus = SyncStatus.LOCAL_ONLY))
+        // Set ownerId to current user if not set
+        val currentUid = auth.currentUser?.uid
+        val taskToInsert = if (task.ownerId == null && currentUid != null) {
+            task.copy(ownerId = currentUid, syncStatus = SyncStatus.LOCAL_ONLY)
+        } else {
+            task.copy(syncStatus = SyncStatus.LOCAL_ONLY)
+        }
+        taskDao.insertTask(taskToInsert)
     }
 
     suspend fun updateTask(task: Task) {

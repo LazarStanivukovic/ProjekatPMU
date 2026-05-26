@@ -51,5 +51,9 @@ data class Task(
     val updatedAt: Long = System.currentTimeMillis(),
     // Sync fields for Firebase Cloud Sync
     val syncStatus: SyncStatus = SyncStatus.LOCAL_ONLY,
-    val cloudId: String? = null
+    val cloudId: String? = null,
+    // Task sharing and collaboration fields
+    val ownerId: String? = null,
+    val sharedWith: List<String> = emptyList(),
+    val pendingInvites: List<String> = emptyList()
 )

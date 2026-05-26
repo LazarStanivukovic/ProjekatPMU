@@ -24,6 +24,15 @@ class CloudTaskRepository @Inject constructor(
         get() = auth.currentUser?.uid
 
     private fun tasksCollection(uid: String) = firestore.collection("users").document(uid).collection("tasks")
+    private val rootTasksCollection = firestore.collection("shared_tasks")
+
+    /**
+     * Get the collection where this task actually lives (using ownerId if available, fallback to current user).
+     */
+    private fun collectionForTask(taskOwnerId: String?): com.google.firebase.firestore.CollectionReference {
+        // Use a root collection for all tasks now to avoid collection group index requirements
+        return rootTasksCollection
+    }
 
     /**
      * Upload a task to Firestore.
@@ -59,11 +68,21 @@ class CloudTaskRepository @Inject constructor(
                 "locationName" to task.locationName,
                 "locationRadius" to task.locationRadius,
                 "createdAt" to task.createdAt,
-                "updatedAt" to task.updatedAt
+                "updatedAt" to task.updatedAt,
+                "ownerId" to task.ownerId,
+                "sharedWith" to task.sharedWith,
+                "pendingInvites" to task.pendingInvites
             )
 
             // Use local ID as document ID for easy lookup
-            tasksCollection(uid).document(task.id).set(taskData).await()
+            collectionForTask(task.ownerId).document(task.id).set(taskData).await()
+
+            // Try to clean up legacy document if it exists, to avoid duplicates on fetch
+            try {
+                tasksCollection(uid).document(task.id).delete().await()
+            } catch (e: Exception) {
+                // Ignore
+            }
 
             Result.success(task.id)
         } catch (e: Exception) {
@@ -91,17 +110,40 @@ class CloudTaskRepository @Inject constructor(
     }
 
     /**
-     * Fetch all tasks from Firestore.
+     * Fetch all tasks from Firestore (owned by user OR shared with user OR pending invite).
      */
     suspend fun fetchAllTasks(): Result<List<Task>> {
         val uid = userId ?: return Result.failure(Exception("Korisnik nije ulogovan"))
+        val email = auth.currentUser?.email
 
         return try {
-            val snapshot = tasksCollection(uid).get().await()
-            val tasks = snapshot.documents.mapNotNull { doc ->
-                doc.data?.let { documentToTask(it, doc.id) }
+            val tasks = mutableSetOf<Task>()
+            
+            // 1. Fetch owned tasks from new root collection
+            val ownedSnapshot = rootTasksCollection
+                .whereEqualTo("ownerId", uid)
+                .get().await()
+            tasks.addAll(ownedSnapshot.documents.mapNotNull { it.data?.let { data -> documentToTask(data, it.id) } })
+            
+            // 2. Fetch shared tasks (if email is available)
+            if (email != null) {
+                val sharedSnapshot = rootTasksCollection
+                    .whereArrayContains("sharedWith", email)
+                    .get().await()
+                tasks.addAll(sharedSnapshot.documents.mapNotNull { it.data?.let { data -> documentToTask(data, it.id) } })
+                
+                // 3. Fetch pending invites
+                val pendingSnapshot = rootTasksCollection
+                    .whereArrayContains("pendingInvites", email)
+                    .get().await()
+                tasks.addAll(pendingSnapshot.documents.mapNotNull { it.data?.let { data -> documentToTask(data, it.id) } })
             }
-            Result.success(tasks)
+
+            // Fallback for legacy tasks (before sharing was implemented, tasks were just stored under user's uid)
+            val legacySnapshot = tasksCollection(uid).get().await()
+            tasks.addAll(legacySnapshot.documents.mapNotNull { it.data?.let { data -> documentToTask(data, it.id) } })
+
+            Result.success(tasks.toList())
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -110,11 +152,14 @@ class CloudTaskRepository @Inject constructor(
     /**
      * Delete a task from Firestore.
      */
-    suspend fun deleteTask(taskId: String): Result<Unit> {
-        val uid = userId ?: return Result.failure(Exception("Korisnik nije ulogovan"))
-
+    suspend fun deleteTask(taskId: String, ownerId: String? = null): Result<Unit> {
         return try {
-            tasksCollection(uid).document(taskId).delete().await()
+            val uid = userId
+            collectionForTask(ownerId).document(taskId).delete().await()
+            if (uid != null) {
+                // Also attempt to delete from legacy collection to avoid ghost tasks
+                tasksCollection(uid).document(taskId).delete().await()
+            }
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
@@ -163,7 +208,10 @@ class CloudTaskRepository @Inject constructor(
             createdAt = ((data["createdAt"] as? Number)?.toLong()) ?: System.currentTimeMillis(),
             updatedAt = ((data["updatedAt"] as? Number)?.toLong()) ?: System.currentTimeMillis(),
             syncStatus = SyncStatus.SYNCED,
-            cloudId = docId
+            cloudId = docId,
+            ownerId = data["ownerId"] as? String,
+            sharedWith = (data["sharedWith"] as? List<String>) ?: emptyList(),
+            pendingInvites = (data["pendingInvites"] as? List<String>) ?: emptyList()
         )
     }
 }

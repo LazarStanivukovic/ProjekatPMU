@@ -142,7 +142,7 @@ class SyncManager @Inject constructor(
     private suspend fun deletePendingTasks() {
         val pendingDelete = taskDao.getTasksBySyncStatus(SyncStatus.PENDING_DELETE)
         for (task in pendingDelete) {
-            cloudTaskRepository.deleteTask(task.id)
+            cloudTaskRepository.deleteTask(task.id, task.ownerId)
             taskDao.deleteTask(task)
         }
     }

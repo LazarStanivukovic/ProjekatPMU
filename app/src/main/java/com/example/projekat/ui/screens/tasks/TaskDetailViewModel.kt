@@ -45,6 +45,8 @@ data class TaskDetailUiState(
     val locationLng: Double? = null,
     val locationName: String? = null,
     val locationRadius: Int = 100,
+    val sharedWith: List<String> = emptyList(),
+    val pendingInvites: List<String> = emptyList(),
     val showColorPicker: Boolean = false,
     val isNew: Boolean = true,
     val isLoading: Boolean = false,
@@ -118,6 +120,8 @@ class TaskDetailViewModel @Inject constructor(
                 locationLng = task.locationLng,
                 locationName = task.locationName,
                 locationRadius = task.locationRadius,
+                sharedWith = task.sharedWith,
+                pendingInvites = task.pendingInvites,
                 isNew = false,
                 isLoading = false,
                 availableNotes = _uiState.value.availableNotes
@@ -369,6 +373,8 @@ class TaskDetailViewModel @Inject constructor(
                 locationLng = state.locationLng,
                 locationName = state.locationName,
                 locationRadius = state.locationRadius,
+                sharedWith = state.sharedWith,
+                pendingInvites = state.pendingInvites,
                 createdAt = now,
                 updatedAt = now
             )
@@ -416,7 +422,9 @@ class TaskDetailViewModel @Inject constructor(
                     locationLat = state.locationLat,
                     locationLng = state.locationLng,
                     locationName = state.locationName,
-                    locationRadius = state.locationRadius
+                    locationRadius = state.locationRadius,
+                    sharedWith = state.sharedWith,
+                    pendingInvites = state.pendingInvites
                 )
             )
             _uiState.value = state.copy(hasUnsavedChanges = false)
@@ -521,7 +529,9 @@ class TaskDetailViewModel @Inject constructor(
                                 locationLat = original.locationLat,
                                 locationLng = original.locationLng,
                                 locationName = original.locationName,
-                                locationRadius = original.locationRadius
+                                locationRadius = original.locationRadius,
+                                sharedWith = original.sharedWith,
+                                pendingInvites = original.pendingInvites
                             )
                         )
                         // Also update geofence to match reverted location
@@ -564,5 +574,16 @@ class TaskDetailViewModel @Inject constructor(
                original.locationLng != current.locationLng ||
                original.locationName != current.locationName ||
                original.locationRadius != current.locationRadius
+    }
+
+    fun shareTask(email: String) {
+        val currentPending = _uiState.value.pendingInvites
+        val currentShared = _uiState.value.sharedWith
+        if (email.isNotBlank() && !currentPending.contains(email) && !currentShared.contains(email)) {
+            _uiState.value = _uiState.value.copy(
+                pendingInvites = currentPending + email
+            )
+            scheduleAutoSave()
+        }
     }
 }
