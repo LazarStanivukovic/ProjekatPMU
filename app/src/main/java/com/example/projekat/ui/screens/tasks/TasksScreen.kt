@@ -62,6 +62,8 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.Composable
@@ -133,8 +135,15 @@ fun TasksScreen(
     if (uiState.showScheduleDialog && uiState.scheduleResults != null) {
         SchedulePreviewDialog(
             results = uiState.scheduleResults!!,
-            onConfirm = { viewModel.applySchedule() },
+            onConfirm = { selectedIds -> viewModel.applySchedule(selectedIds) },
             onDismiss = { viewModel.dismissScheduleDialog() }
+        )
+    }
+
+    if (uiState.showPromptDialog) {
+        AiPromptDialog(
+            onConfirm = { prompt -> viewModel.requestAiSchedule(prompt) },
+            onDismiss = { viewModel.dismissAiPromptDialog() }
         )
     }
 
@@ -281,7 +290,7 @@ fun TasksScreen(
                                     modifier = Modifier.weight(1f)
                                 )
                                 Button(
-                                    onClick = { viewModel.requestAiSchedule() },
+                                    onClick = { viewModel.showAiPromptDialog() },
                                     enabled = uiState.selectedTaskIds.isNotEmpty() && !uiState.isAiLoading,
                                     shape = RoundedCornerShape(8.dp),
                                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp)
@@ -729,17 +738,82 @@ private fun formatTaskDateRange(
     }
 }
 
+@Composable
+private fun AiPromptDialog(
+    onConfirm: (String?) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var prompt by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(20.dp),
+        icon = {
+            Icon(
+                Icons.Default.AutoAwesome,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(32.dp)
+            )
+        },
+        title = {
+            Text(
+                text = "Dodatne instrukcije za AI",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column {
+                Text(
+                    text = "Da li imate neke specificne zahteve za rasporedjivanje ovih taskova? (Opciono)",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                OutlinedTextField(
+                    value = prompt,
+                    onValueChange = { prompt = it },
+                    placeholder = { Text("Npr. Rasporedi vecinu za vikend...") },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(120.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                    )
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onConfirm(prompt.takeIf { it.isNotBlank() }) },
+                shape = RoundedCornerShape(10.dp)
+            ) {
+                Text("Generisi")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Otkazi")
+            }
+        }
+    )
+}
+
 /**
  * Dialog showing AI-generated schedule for preview before applying.
  */
 @Composable
 private fun SchedulePreviewDialog(
     results: List<ScheduleResult>,
-    onConfirm: () -> Unit,
+    onConfirm: (List<String>) -> Unit,
     onDismiss: () -> Unit
 ) {
     val dateFormat = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
     val parseFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+    val selectedIds = remember { androidx.compose.runtime.mutableStateListOf<String>().apply { addAll(results.map { it.taskId }) } }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -765,70 +839,107 @@ private fun SchedulePreviewDialog(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(
-                    text = "Pregled predlozenog rasporeda. Potvrdite da primenite nove rokove.",
+                    text = "Pregled predlozenog rasporeda. Odznacite taskove koje ne zelite da primenite.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(modifier = Modifier.height(4.dp))
 
                 results.forEach { result ->
+                    val isSelected = selectedIds.contains(result.taskId)
                     val originalDate = try {
-                        parseFormat.parse(result.originalDeadline)?.let { dateFormat.format(it) } ?: result.originalDeadline
-                    } catch (_: Exception) { result.originalDeadline }
+                        val parser = if (result.hasTime) SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US) else parseFormat
+                        val formatter = if (result.hasTime) SimpleDateFormat("dd MMM yyyy HH:mm", Locale.getDefault()) else dateFormat
+                        
+                        val start = parser.parse(result.originalStartDateTime)?.let { formatter.format(it) } ?: result.originalStartDateTime
+                        if (result.originalEndDateTime != null) {
+                            val end = parser.parse(result.originalEndDateTime)?.let { formatter.format(it) } ?: result.originalEndDateTime
+                            "$start - $end"
+                        } else start
+                    } catch (_: Exception) { result.originalStartDateTime }
 
                     val scheduledDate = try {
-                        parseFormat.parse(result.scheduledDate)?.let { dateFormat.format(it) } ?: result.scheduledDate
-                    } catch (_: Exception) { result.scheduledDate }
+                        val parser = if (result.hasTime) SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US) else parseFormat
+                        val formatter = if (result.hasTime) SimpleDateFormat("dd MMM yyyy HH:mm", Locale.getDefault()) else dateFormat
+                        
+                        val start = parser.parse(result.scheduledStartDateTime)?.let { formatter.format(it) } ?: result.scheduledStartDateTime
+                        if (result.scheduledEndDateTime != null) {
+                            val end = parser.parse(result.scheduledEndDateTime)?.let { formatter.format(it) } ?: result.scheduledEndDateTime
+                            "$start - $end"
+                        } else start
+                    } catch (_: Exception) { result.scheduledStartDateTime }
 
                     Card(
                         shape = RoundedCornerShape(12.dp),
                         colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                        )
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (isSelected) 1f else 0.5f)
+                        ),
+                        modifier = Modifier.clickable {
+                            if (isSelected) {
+                                selectedIds.remove(result.taskId)
+                            } else {
+                                selectedIds.add(result.taskId)
+                            }
+                        }
                     ) {
-                        Column(
+                        Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(12.dp)
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                text = result.taskName,
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.SemiBold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+                            Icon(
+                                imageVector = if (isSelected) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
+                                contentDescription = null,
+                                tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(20.dp)
                             )
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                // Original date
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = originalDate,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    text = result.taskName,
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    color = if (isSelected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
                                 )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Icon(
-                                    Icons.AutoMirrored.Filled.ArrowForward,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(14.dp),
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                // New scheduled date
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(6.dp))
-                                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
-                                        .padding(horizontal = 8.dp, vertical = 2.dp)
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
+                                    // Original date
                                     Text(
-                                        text = scheduledDate,
+                                        text = originalDate,
                                         style = MaterialTheme.typography.bodySmall,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = MaterialTheme.colorScheme.primary
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        textDecoration = if (isSelected) TextDecoration.LineThrough else null
                                     )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Icon(
+                                        Icons.AutoMirrored.Filled.ArrowForward,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(14.dp),
+                                        tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    // New scheduled date
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(
+                                                if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                                                else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.12f)
+                                            )
+                                            .padding(horizontal = 8.dp, vertical = 2.dp)
+                                    ) {
+                                        Text(
+                                            text = scheduledDate,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -838,8 +949,9 @@ private fun SchedulePreviewDialog(
         },
         confirmButton = {
             Button(
-                onClick = onConfirm,
-                shape = RoundedCornerShape(10.dp)
+                onClick = { onConfirm(selectedIds) },
+                shape = RoundedCornerShape(10.dp),
+                enabled = selectedIds.isNotEmpty()
             ) {
                 Icon(
                     Icons.Default.CheckCircle,

@@ -10,7 +10,9 @@ data class AiScheduleRequest(
 data class TaskItem(
     val name: String,
     val priority: String, // HIGH, MEDIUM, LOW
-    val deadline: String  // YYYY-MM-DD format
+    val startDateTime: String,  // YYYY-MM-DD or YYYY-MM-DD HH:mm
+    val endDateTime: String?,   // YYYY-MM-DD or YYYY-MM-DD HH:mm
+    val hasTime: Boolean
 )
 
 /**
@@ -22,7 +24,9 @@ data class AiScheduleResponse(
 
 data class ScheduledTask(
     val name: String,
-    val scheduledDate: String // YYYY-MM-DD format
+    val newStartDateTime: String,
+    val newEndDateTime: String?,
+    val hasTime: Boolean
 )
 
 /**

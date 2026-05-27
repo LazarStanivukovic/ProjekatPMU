@@ -45,8 +45,8 @@ class PollinationsAiClient @Inject constructor() {
      * @return List of scheduled tasks with suggested dates
      * @throws Exception if the API call fails or response is invalid
      */
-    suspend fun generateSchedule(tasks: List<TaskItem>): List<ScheduledTask> {
-        val prompt = buildPrompt(tasks)
+    suspend fun generateSchedule(tasks: List<TaskItem>, customPrompt: String? = null): List<ScheduledTask> {
+        val prompt = buildPrompt(tasks, customPrompt)
         val requestBody = buildRequestBody(prompt)
 
         Log.d(TAG, "Sending request to Pollinations.ai with ${tasks.size} tasks")
@@ -73,9 +73,10 @@ class PollinationsAiClient @Inject constructor() {
     /**
      * Build the prompt for the AI to schedule tasks.
      */
-    private fun buildPrompt(tasks: List<TaskItem>): String {
+    private fun buildPrompt(tasks: List<TaskItem>, customPrompt: String?): String {
         val taskListText = tasks.mapIndexed { index, task ->
-            "${index + 1}. \"${task.name}\" - prioritet: ${task.priority}, datum: ${task.deadline}"
+            val timeStr = if (task.hasTime) " (Ukljucuje vreme)" else " (Samo datum)"
+            "${index + 1}. \"${task.name}\" - prioritet: ${task.priority}, pocetak: ${task.startDateTime}, kraj: ${task.endDateTime}$timeStr"
         }.joinToString("\n")
 
         val calendar = Calendar.getInstance()
@@ -83,23 +84,28 @@ class PollinationsAiClient @Inject constructor() {
         calendar.add(Calendar.DAY_OF_MONTH, 1)
         val tomorrow = dateFormat.format(calendar.time)
 
+        val customInstructions = if (!customPrompt.isNullOrBlank()) {
+            "\nDodatne instrukcije korisnika:\n$customPrompt\n"
+        } else {
+            ""
+        }
+
         return """
 Napravi optimalan raspored za sledece taskove.
 Danasnji datum je: $today
-
+$customInstructions
 Taskovi:
 $taskListText
 
 Pravila za raspored:
 - Najraniji moguc datum za raspored je $tomorrow (NIKADA nemoj staviti danasnji datum $today)
 - HIGH prioritet: zavrsi sto pre (najblize sutrasnjim datumu $tomorrow)
-- MEDIUM prioritet: rasporedi ravnomerno izmedju $tomorrow i krajnjeg roka
-- LOW prioritet: moze da saceka ali mora biti pre krajnjeg roka
-        - Svaki scheduledDate mora biti izmedju $tomorrow i datuma taska (ukljucivo)
-- Ne stavljaj previse taskova na isti dan
+- MEDIUM prioritet: rasporedi ravnomerno
+- LOW prioritet: moze da saceka
+- Ako task ima vreme (hasTime=true), obavezno vrati YYYY-MM-DD HH:mm i za start i za end (npr. 14:00 do 16:00). Ako ne, vrati YYYY-MM-DD.
 
-Odgovori SAMO sa JSON nizom, bez ikakvog dodatnog teksta, objasnjenja ili markdown formatiranja.
-Format: [{"name":"tacno ime taska","scheduledDate":"YYYY-MM-DD"},{"name":"tacno ime taska 2","scheduledDate":"YYYY-MM-DD"}]
+Odgovori SAMO sa JSON nizom.
+Format: [{"name":"tacno ime taska","newStartDateTime":"YYYY-MM-DD HH:mm","newEndDateTime":"YYYY-MM-DD HH:mm","hasTime":true}]
 Mora biti niz sa ${tasks.size} elemenata, po jedan za svaki task.
         """.trimIndent()
     }
@@ -171,7 +177,9 @@ Mora biti niz sa ${tasks.size} elemenata, po jedan za svaki task.
             return originalTasks.map { task ->
                 ScheduledTask(
                     name = task.name,
-                    scheduledDate = task.deadline
+                    newStartDateTime = task.startDateTime,
+                    newEndDateTime = task.endDateTime,
+                    hasTime = task.hasTime
                 )
             }
         }
@@ -198,8 +206,16 @@ Mora biti niz sa ${tasks.size} elemenata, po jedan za svaki task.
      */
     private fun parseSingleTask(obj: JsonObject): ScheduledTask {
         val name = obj.get("name")?.asString ?: ""
-        val scheduledDate = obj.get("scheduledDate")?.asString ?: ""
-        return ScheduledTask(name, scheduledDate)
+        val newStartDateTime = obj.get("newStartDateTime")?.asString ?: ""
+        val newEndDateTimeRaw = if (obj.has("newEndDateTime") && !obj.get("newEndDateTime").isJsonNull) {
+            obj.get("newEndDateTime").asString
+        } else null
+        val newEndDateTime = if (newEndDateTimeRaw.isNullOrBlank()) null else newEndDateTimeRaw
+        val hasTime = if (obj.has("hasTime") && !obj.get("hasTime").isJsonNull) {
+            obj.get("hasTime").asBoolean
+        } else false
+        
+        return ScheduledTask(name, newStartDateTime, newEndDateTime, hasTime)
     }
 
     /**
@@ -217,7 +233,12 @@ Mora biti niz sa ${tasks.size} elemenata, po jedan za svaki task.
         val missing = originalTasks
             .filter { it.name !in resultNames }
             .map { task ->
-                ScheduledTask(name = task.name, scheduledDate = task.deadline)
+                ScheduledTask(
+                    name = task.name, 
+                    newStartDateTime = task.startDateTime, 
+                    newEndDateTime = task.endDateTime, 
+                    hasTime = task.hasTime
+                )
             }
 
         return taskList + missing

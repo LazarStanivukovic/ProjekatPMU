@@ -24,7 +24,7 @@ class AiScheduleService @Inject constructor(
      * @param tasks List of tasks to schedule
      * @return Result containing scheduled tasks or error
      */
-    suspend fun requestSchedule(tasks: List<TaskItem>): Result<List<ScheduledTask>> {
+    suspend fun requestSchedule(tasks: List<TaskItem>, customPrompt: String? = null): Result<List<ScheduledTask>> {
         return withContext(Dispatchers.IO) {
             try {
                 // Validate input
@@ -32,17 +32,17 @@ class AiScheduleService @Inject constructor(
                     return@withContext Result.failure(Exception("Lista taskova je prazna"))
                 }
 
-                Log.d(TAG, "Requesting schedule for ${tasks.size} tasks")
+                Log.d(TAG, "Requesting schedule for ${tasks.size} tasks with prompt: $customPrompt")
                 tasks.forEach { task ->
-                    Log.d(TAG, "  - ${task.name} (${task.priority}, date: ${task.deadline})")
+                    Log.d(TAG, "  - ${task.name} (${task.priority}, date: ${task.startDateTime})")
                 }
 
                 // Call AI client
-                val scheduledTasks = aiClient.generateSchedule(tasks)
+                val scheduledTasks = aiClient.generateSchedule(tasks, customPrompt)
 
                 Log.d(TAG, "Received ${scheduledTasks.size} scheduled tasks")
                 scheduledTasks.forEach { task ->
-                    Log.d(TAG, "  - ${task.name} → ${task.scheduledDate}")
+                    Log.d(TAG, "  - ${task.name} → ${task.newStartDateTime}")
                 }
 
                 Result.success(scheduledTasks)

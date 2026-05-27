@@ -35,6 +35,7 @@ data class TasksUiState(
     val aiError: String? = null,
     val scheduleResults: List<ScheduleResult>? = null,
     val showScheduleDialog: Boolean = false,
+    val showPromptDialog: Boolean = false,
     val pendingInvites: List<Task> = emptyList()
 )
 
@@ -67,6 +68,7 @@ class TasksViewModel @Inject constructor(
             aiError = aiState.error,
             scheduleResults = aiState.results,
             showScheduleDialog = aiState.showDialog,
+            showPromptDialog = aiState.showPromptDialog,
             pendingInvites = pendingInvitesList
         )
     }.stateIn(
@@ -280,10 +282,18 @@ class TasksViewModel @Inject constructor(
         }
     }
 
+    fun showAiPromptDialog() {
+        _aiState.update { it.copy(showPromptDialog = true) }
+    }
+
+    fun dismissAiPromptDialog() {
+        _aiState.update { it.copy(showPromptDialog = false) }
+    }
+
     /**
      * Send selected tasks to AI backend for scheduling.
      */
-    fun requestAiSchedule() {
+    fun requestAiSchedule(customPrompt: String? = null) {
         val selectedIds = _aiState.value.selectedTaskIds
         if (selectedIds.isEmpty()) return
 
@@ -291,14 +301,14 @@ class TasksViewModel @Inject constructor(
         // Only tasks with start dates can be scheduled
         val schedulableTasks = tasks.filter { it.startDate != null }
         if (schedulableTasks.isEmpty()) {
-            _aiState.update { it.copy(error = "Izabrani taskovi nemaju datume.") }
+            _aiState.update { it.copy(error = "Izabrani taskovi nemaju datume.", showPromptDialog = false) }
             return
         }
 
         viewModelScope.launch {
-            _aiState.update { it.copy(isLoading = true, error = null) }
+            _aiState.update { it.copy(isLoading = true, error = null, showPromptDialog = false) }
 
-            val result = aiScheduleRepository.requestSchedule(schedulableTasks)
+            val result = aiScheduleRepository.requestSchedule(schedulableTasks, customPrompt)
 
             result.onSuccess { scheduleResults ->
                 _aiState.update {
@@ -326,23 +336,36 @@ class TasksViewModel @Inject constructor(
     /**
      * Apply AI-suggested scheduled dates to tasks (overwrite dates with scheduled dates).
      */
-    fun applySchedule() {
+    fun applySchedule(selectedResultTaskIds: List<String>) {
         val results = _aiState.value.results ?: return
         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+        val dateTimeFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US)
 
         viewModelScope.launch {
             for (scheduleResult in results) {
+                if (scheduleResult.taskId !in selectedResultTaskIds) continue
+                
                 val task = uiState.value.tasks.find { it.id == scheduleResult.taskId } ?: continue
                 try {
-                    val scheduledDate = dateFormat.parse(scheduleResult.scheduledDate) ?: continue
+                    var scheduledStart = dateTimeFormat.parse(scheduleResult.scheduledStartDateTime)
+                        ?: dateFormat.parse(scheduleResult.scheduledStartDateTime)
+                        ?: continue
+                    
+                    val newStartMillis = scheduledStart.time
+                    
+                    val newEndMillis = if (scheduleResult.scheduledEndDateTime != null) {
+                        dateTimeFormat.parse(scheduleResult.scheduledEndDateTime)
+                            ?: dateFormat.parse(scheduleResult.scheduledEndDateTime)
+                            ?.time
+                    } else null
+
                     val updatedTask = task.copy(
-                        startDate = scheduledDate.time,
-                        endDate = null,
-                        hasTime = false,
+                        startDate = newStartMillis,
+                        endDate = (newEndMillis ?: task.endDate) as Long?,
+                        hasTime = scheduleResult.hasTime || scheduleResult.scheduledStartDateTime.contains(":"),
                         updatedAt = System.currentTimeMillis()
                     )
                     taskRepository.updateTask(updatedTask)
-                    // Re-schedule notification for the new date
                     deadlineScheduler.scheduleDeadlineNotification(
                         updatedTask.id,
                         updatedTask.title,
@@ -353,7 +376,6 @@ class TasksViewModel @Inject constructor(
                     // Skip tasks with unparseable dates
                 }
             }
-            // Exit selection mode after applying
             _aiState.update { AiState() }
         }
     }
@@ -372,6 +394,7 @@ class TasksViewModel @Inject constructor(
         val isLoading: Boolean = false,
         val error: String? = null,
         val results: List<ScheduleResult>? = null,
-        val showDialog: Boolean = false
+        val showDialog: Boolean = false,
+        val showPromptDialog: Boolean = false
     )
 }
