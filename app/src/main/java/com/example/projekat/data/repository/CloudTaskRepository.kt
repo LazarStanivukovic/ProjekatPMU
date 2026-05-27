@@ -70,6 +70,7 @@ class CloudTaskRepository @Inject constructor(
                 "createdAt" to task.createdAt,
                 "updatedAt" to task.updatedAt,
                 "ownerId" to task.ownerId,
+                "ownerEmail" to task.ownerEmail,
                 "sharedWith" to task.sharedWith,
                 "pendingInvites" to task.pendingInvites
             )
@@ -210,6 +211,7 @@ class CloudTaskRepository @Inject constructor(
             syncStatus = SyncStatus.SYNCED,
             cloudId = docId,
             ownerId = data["ownerId"] as? String,
+            ownerEmail = data["ownerEmail"] as? String,
             sharedWith = (data["sharedWith"] as? List<String>) ?: emptyList(),
             pendingInvites = (data["pendingInvites"] as? List<String>) ?: emptyList()
         )

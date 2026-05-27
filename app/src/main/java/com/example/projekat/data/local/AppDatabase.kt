@@ -98,9 +98,16 @@ val MIGRATION_9_10 = object : Migration(9, 10) {
     }
 }
 
+val MIGRATION_10_11 = object : Migration(10, 11) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        // Add ownerEmail for displaying the sender in Inbox
+        db.execSQL("ALTER TABLE tasks ADD COLUMN ownerEmail TEXT")
+    }
+}
+
 @Database(
     entities = [Note::class, Task::class],
-    version = 10,
+    version = 11,
     exportSchema = false
 )
 @TypeConverters(Converters::class)

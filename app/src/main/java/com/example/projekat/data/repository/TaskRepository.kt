@@ -27,10 +27,11 @@ class TaskRepository @Inject constructor(
 
     suspend fun insertTask(task: Task) {
         // New tasks start as LOCAL_ONLY, will be synced later
-        // Set ownerId to current user if not set
+        // Set ownerId and ownerEmail to current user if not set
         val currentUid = auth.currentUser?.uid
+        val currentEmail = auth.currentUser?.email
         val taskToInsert = if (task.ownerId == null && currentUid != null) {
-            task.copy(ownerId = currentUid, syncStatus = SyncStatus.LOCAL_ONLY)
+            task.copy(ownerId = currentUid, ownerEmail = currentEmail, syncStatus = SyncStatus.LOCAL_ONLY)
         } else {
             task.copy(syncStatus = SyncStatus.LOCAL_ONLY)
         }

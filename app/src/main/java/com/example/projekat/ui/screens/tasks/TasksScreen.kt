@@ -687,7 +687,7 @@ fun InviteCard(
             }
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Od: ${task.ownerId}",
+                text = "Od: ${task.ownerEmail ?: task.ownerId}",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

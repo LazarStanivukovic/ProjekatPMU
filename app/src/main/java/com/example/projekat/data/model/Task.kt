@@ -54,6 +54,7 @@ data class Task(
     val cloudId: String? = null,
     // Task sharing and collaboration fields
     val ownerId: String? = null,
+    val ownerEmail: String? = null,
     val sharedWith: List<String> = emptyList(),
     val pendingInvites: List<String> = emptyList()
 )
