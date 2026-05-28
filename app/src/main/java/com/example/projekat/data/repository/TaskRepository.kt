@@ -73,6 +73,8 @@ class TaskRepository @Inject constructor(
         val newStatus = when (task.status) {
             TaskStatus.IN_PROGRESS -> TaskStatus.COMPLETED
             TaskStatus.COMPLETED -> TaskStatus.IN_PROGRESS
+            TaskStatus.PAUSED -> TaskStatus.IN_PROGRESS
+            TaskStatus.CANCELED -> TaskStatus.IN_PROGRESS
         }
         val newSyncStatus = if (task.syncStatus == SyncStatus.LOCAL_ONLY) {
             SyncStatus.LOCAL_ONLY

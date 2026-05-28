@@ -8,7 +8,6 @@ import com.example.projekat.data.model.ChecklistItem
 import com.example.projekat.data.model.Note
 import com.example.projekat.data.model.RepeatInterval
 import com.example.projekat.data.model.Task
-import com.example.projekat.data.model.TaskPriority
 import com.example.projekat.data.model.TaskStatus
 import com.example.projekat.data.repository.NoteRepository
 import com.example.projekat.data.repository.TaskRepository
@@ -30,7 +29,7 @@ data class TaskDetailUiState(
     val title: String = "",
     val description: String = "",
     val status: TaskStatus = TaskStatus.IN_PROGRESS,
-    val priority: TaskPriority = TaskPriority.MEDIUM,
+    val priorityScore: Int = 5,
     val startDate: Long? = null,
     val endDate: Long? = null,
     val hasTime: Boolean = false,
@@ -106,7 +105,7 @@ class TaskDetailViewModel @Inject constructor(
                 title = task.title,
                 description = task.description,
                 status = task.status,
-                priority = task.priority,
+                priorityScore = task.priorityScore,
                 startDate = task.startDate,
                 endDate = task.endDate,
                 hasTime = task.hasTime,
@@ -246,8 +245,9 @@ class TaskDetailViewModel @Inject constructor(
         return utcCal.timeInMillis
     }
 
-    fun updatePriority(priority: TaskPriority) {
-        _uiState.value = _uiState.value.copy(priority = priority)
+    fun updatePriority(score: Int) {
+        val clampedScore = score.coerceIn(1, 10)
+        _uiState.value = _uiState.value.copy(priorityScore = clampedScore)
         scheduleAutoSave()
     }
 
@@ -360,7 +360,7 @@ class TaskDetailViewModel @Inject constructor(
                 title = state.title,
                 description = state.description,
                 status = state.status,
-                priority = state.priority,
+                priorityScore = state.priorityScore,
                 startDate = state.startDate,
                 endDate = state.endDate,
                 hasTime = state.hasTime,
@@ -410,7 +410,7 @@ class TaskDetailViewModel @Inject constructor(
                     title = state.title,
                     description = state.description,
                     status = state.status,
-                    priority = state.priority,
+                    priorityScore = state.priorityScore,
                     startDate = state.startDate,
                     endDate = state.endDate,
                     hasTime = state.hasTime,
@@ -517,7 +517,7 @@ class TaskDetailViewModel @Inject constructor(
                                 title = original.title,
                                 description = original.description,
                                 status = original.status,
-                                priority = original.priority,
+                                priorityScore = original.priorityScore,
                                 startDate = original.startDate,
                                 endDate = original.endDate,
                                 hasTime = original.hasTime,
@@ -561,7 +561,7 @@ class TaskDetailViewModel @Inject constructor(
         return original.title != current.title ||
                original.description != current.description ||
                original.status != current.status ||
-               original.priority != current.priority ||
+               original.priorityScore != current.priorityScore ||
                original.startDate != current.startDate ||
                original.endDate != current.endDate ||
                original.hasTime != current.hasTime ||

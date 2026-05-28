@@ -28,6 +28,8 @@ data class TasksUiState(
     val tasks: List<Task> = emptyList(),
     val inProgressCount: Int = 0,
     val completedCount: Int = 0,
+    val pausedCount: Int = 0,
+    val canceledCount: Int = 0,
     // AI scheduling state
     val isSelectionMode: Boolean = false,
     val selectedTaskIds: Set<String> = emptySet(),
@@ -62,6 +64,8 @@ class TasksViewModel @Inject constructor(
             tasks = normalTasks,
             inProgressCount = normalTasks.count { it.status == TaskStatus.IN_PROGRESS },
             completedCount = normalTasks.count { it.status == TaskStatus.COMPLETED },
+            pausedCount = normalTasks.count { it.status == TaskStatus.PAUSED },
+            canceledCount = normalTasks.count { it.status == TaskStatus.CANCELED },
             isSelectionMode = aiState.isSelectionMode,
             selectedTaskIds = aiState.selectedTaskIds,
             isAiLoading = aiState.isLoading,
@@ -82,6 +86,8 @@ class TasksViewModel @Inject constructor(
             val newStatus = when (task.status) {
                 TaskStatus.IN_PROGRESS -> TaskStatus.COMPLETED
                 TaskStatus.COMPLETED -> TaskStatus.IN_PROGRESS
+                TaskStatus.PAUSED -> TaskStatus.IN_PROGRESS
+                TaskStatus.CANCELED -> TaskStatus.IN_PROGRESS
             }
             
             if (newStatus == TaskStatus.COMPLETED && task.repeatInterval != RepeatInterval.NONE) {

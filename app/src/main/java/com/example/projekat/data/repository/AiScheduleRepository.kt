@@ -26,7 +26,7 @@ class AiScheduleRepository @Inject constructor(
             val taskItems = tasks.map { task ->
                 TaskItem(
                     name = task.title,
-                    priority = task.priority.name,
+                    priority = task.priorityScore.toString(),
                     startDateTime = formatDateTime(task.startDate, task.hasTime),
                     endDateTime = task.endDate?.let { formatDateTime(it, task.hasTime) }
                         ?: formatDateTime(task.startDate, task.hasTime),

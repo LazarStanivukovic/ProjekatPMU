@@ -56,7 +56,9 @@ val NotePurpleDark = Color(0xFF2E1E35)
 
 // Status colors
 val StatusInProgress = Color(0xFFFFA726)
+val StatusPaused = Color(0xFF78909C)
 val StatusCompleted = Color(0xFF66BB6A)
+val StatusCanceled = Color(0xFFBDBDBD)
 val StatusOverdue = Color(0xFFEF5350)
 val BookmarkColor = Color(0xFFFFD54F)
 

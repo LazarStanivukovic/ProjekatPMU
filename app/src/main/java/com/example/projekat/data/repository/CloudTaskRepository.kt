@@ -4,7 +4,6 @@ import com.example.projekat.data.model.ChecklistItem
 import com.example.projekat.data.model.RepeatInterval
 import com.example.projekat.data.model.SyncStatus
 import com.example.projekat.data.model.Task
-import com.example.projekat.data.model.TaskPriority
 import com.example.projekat.data.model.TaskStatus
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -46,7 +45,7 @@ class CloudTaskRepository @Inject constructor(
                 "title" to task.title,
                 "description" to task.description,
                 "status" to task.status.name,
-                "priority" to task.priority.name,
+                "priorityScore" to task.priorityScore,
                 "startDate" to task.startDate,
                 "endDate" to task.endDate,
                 "hasTime" to task.hasTime,
@@ -183,15 +182,27 @@ class CloudTaskRepository @Inject constructor(
         }
 
         val statusStr = (data["status"] as? String) ?: "IN_PROGRESS"
-        val priorityStr = (data["priority"] as? String) ?: "MEDIUM"
         val repeatIntervalStr = (data["repeatInterval"] as? String) ?: "NONE"
+
+        // Handle backward compatibility for priority -> priorityScore
+        val priorityScore = if (data.containsKey("priorityScore")) {
+            ((data["priorityScore"] as? Number)?.toInt()) ?: 5
+        } else {
+            val oldPriority = (data["priority"] as? String) ?: "MEDIUM"
+            when (oldPriority) {
+                "HIGH" -> 8
+                "MEDIUM" -> 5
+                "LOW" -> 3
+                else -> 5
+            }
+        }
 
         return Task(
             id = (data["id"] as? String) ?: docId,
             title = (data["title"] as? String) ?: "",
             description = (data["description"] as? String) ?: "",
             status = try { TaskStatus.valueOf(statusStr) } catch (e: Exception) { TaskStatus.IN_PROGRESS },
-            priority = try { TaskPriority.valueOf(priorityStr) } catch (e: Exception) { TaskPriority.MEDIUM },
+            priorityScore = priorityScore,
             startDate = (data["startDate"] as? Number)?.toLong()
                 ?: (data["deadline"] as? Number)?.toLong(),
             endDate = (data["endDate"] as? Number)?.toLong(),

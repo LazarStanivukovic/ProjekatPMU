@@ -4,7 +4,6 @@ import androidx.room.TypeConverter
 import com.example.projekat.data.model.ChecklistItem
 import com.example.projekat.data.model.RepeatInterval
 import com.example.projekat.data.model.SyncStatus
-import com.example.projekat.data.model.TaskPriority
 import com.example.projekat.data.model.TaskStatus
 import org.json.JSONArray
 import org.json.JSONObject
@@ -28,16 +27,6 @@ class Converters {
     @TypeConverter
     fun toTaskStatus(value: String): TaskStatus {
         return TaskStatus.valueOf(value)
-    }
-
-    @TypeConverter
-    fun fromTaskPriority(priority: TaskPriority): String {
-        return priority.name
-    }
-
-    @TypeConverter
-    fun toTaskPriority(value: String): TaskPriority {
-        return TaskPriority.valueOf(value)
     }
 
     @TypeConverter

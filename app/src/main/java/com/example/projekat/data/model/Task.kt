@@ -6,13 +6,9 @@ import java.util.UUID
 
 enum class TaskStatus {
     IN_PROGRESS,
-    COMPLETED
-}
-
-enum class TaskPriority {
-    HIGH,
-    MEDIUM,
-    LOW
+    COMPLETED,
+    PAUSED,
+    CANCELED
 }
 
 enum class RepeatInterval {
@@ -30,7 +26,7 @@ data class Task(
     val title: String = "",
     val description: String = "",
     val status: TaskStatus = TaskStatus.IN_PROGRESS,
-    val priority: TaskPriority = TaskPriority.MEDIUM,
+    val priorityScore: Int = 5,
     // Date range / time fields
     val startDate: Long? = null,
     val endDate: Long? = null,

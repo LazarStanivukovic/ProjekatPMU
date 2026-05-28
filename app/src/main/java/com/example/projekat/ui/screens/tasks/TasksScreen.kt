@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -81,7 +83,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.projekat.data.model.Task
-import com.example.projekat.data.model.TaskPriority
 import com.example.projekat.data.model.TaskStatus
 import com.example.projekat.data.repository.ScheduleResult
 import com.example.projekat.ui.components.ChecklistPreview
@@ -101,9 +102,11 @@ import com.example.projekat.ui.theme.NoteYellowDark
 import com.example.projekat.ui.theme.PriorityHigh
 import com.example.projekat.ui.theme.PriorityLow
 import com.example.projekat.ui.theme.PriorityMedium
+import com.example.projekat.ui.theme.StatusCanceled
 import com.example.projekat.ui.theme.StatusCompleted
 import com.example.projekat.ui.theme.StatusInProgress
 import com.example.projekat.ui.theme.StatusOverdue
+import com.example.projekat.ui.theme.StatusPaused
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -232,11 +235,13 @@ fun TasksScreen(
 
             if (selectedTabIndex == 0) {
                 // Stats row
-                Row(
+                @OptIn(ExperimentalLayoutApi::class)
+                FlowRow(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 20.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     StatCard(
                         label = "U toku",
@@ -245,9 +250,21 @@ fun TasksScreen(
                         modifier = Modifier.weight(1f)
                     )
                     StatCard(
+                        label = "Pauzirano",
+                        count = uiState.pausedCount,
+                        color = StatusPaused,
+                        modifier = Modifier.weight(1f)
+                    )
+                    StatCard(
                         label = "Zavrseno",
                         count = uiState.completedCount,
                         color = StatusCompleted,
+                        modifier = Modifier.weight(1f)
+                    )
+                    StatCard(
+                        label = "Otkazano",
+                        count = uiState.canceledCount,
+                        color = StatusCanceled,
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -473,13 +490,18 @@ fun TaskCard(
     val dateFormat = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
     val dateTimeFormat = SimpleDateFormat("dd MMM yyyy HH:mm", Locale.getDefault())
     val isCompleted = task.status == TaskStatus.COMPLETED
+    val isPaused = task.status == TaskStatus.PAUSED
+    val isCanceled = task.status == TaskStatus.CANCELED
     val primaryDate = task.endDate ?: task.startDate
     val isOverdue = primaryDate != null &&
             primaryDate < System.currentTimeMillis() &&
-            task.status != TaskStatus.COMPLETED
+            task.status != TaskStatus.COMPLETED &&
+            task.status != TaskStatus.CANCELED
 
     val statusColor = when {
         isCompleted -> StatusCompleted
+        isPaused -> StatusPaused
+        isCanceled -> StatusCanceled
         isOverdue -> StatusOverdue
         else -> StatusInProgress
     }
@@ -579,16 +601,13 @@ fun TaskCard(
                 // Priority + date row
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    val priorityColor = when (task.priority) {
-                        TaskPriority.HIGH -> PriorityHigh
-                        TaskPriority.MEDIUM -> PriorityMedium
-                        TaskPriority.LOW -> PriorityLow
+                    val priorityColor = when (task.priorityScore) {
+                        in 8..10 -> PriorityHigh
+                        in 4..7 -> PriorityMedium
+                        else -> PriorityLow
                     }
-                    val priorityLabel = when (task.priority) {
-                        TaskPriority.HIGH -> "Visok"
-                        TaskPriority.MEDIUM -> "Srednji"
-                        TaskPriority.LOW -> "Nizak"
-                    }
+                    val priorityLabel = "Prioritet: ${task.priorityScore}"
+
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(6.dp))
