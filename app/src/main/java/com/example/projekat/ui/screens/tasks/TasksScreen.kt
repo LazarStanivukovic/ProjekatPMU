@@ -110,9 +110,11 @@ import com.example.projekat.ui.theme.StatusPaused
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 private val taskColorsLight = listOf(NoteYellow, NoteGreen, NoteBlue, NotePink, NoteOrange, NotePurple)
 private val taskColorsDark = listOf(NoteYellowDark, NoteGreenDark, NoteBlueDark, NotePinkDark, NoteOrangeDark, NotePurpleDark)
+
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -150,7 +152,11 @@ fun TasksScreen(
         )
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    PullToRefreshBox(
+        isRefreshing = uiState.isSyncing,
+        onRefresh = { viewModel.swipeToRefresh() },
+        modifier = Modifier.fillMaxSize()
+    ) {
         Column(
             modifier = Modifier.fillMaxSize()
         ) {
@@ -336,7 +342,13 @@ fun TasksScreen(
                     }
                 }
 
-                if (uiState.tasks.isEmpty()) {
+                val displayTasks = if (uiState.isSelectionMode) {
+                    uiState.tasks.filter { viewModel.isTaskEligibleForAi(it) }
+                } else {
+                    uiState.tasks
+                }
+
+                if (displayTasks.isEmpty()) {
                     Box(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center
@@ -350,7 +362,7 @@ fun TasksScreen(
                             )
                             Spacer(modifier = Modifier.height(16.dp))
                             Text(
-                                text = "Nema taskova",
+                                text = if (uiState.isSelectionMode) "Nema taskova za AI raspored" else "Nema taskova",
                                 style = MaterialTheme.typography.titleMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -362,7 +374,7 @@ fun TasksScreen(
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                         modifier = Modifier.fillMaxSize()
                     ) {
-                        items(uiState.tasks, key = { it.id }) { task ->
+                        items(displayTasks, key = { it.id }) { task ->
                             TaskCard(
                                 task = task,
                                 onClick = {
@@ -582,7 +594,6 @@ fun TaskCard(
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                     color = if (isCompleted) subtextColor else textColor,
-                    textDecoration = if (isCompleted) TextDecoration.LineThrough else null,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -686,11 +697,17 @@ fun InviteCard(
     onAccept: () -> Unit,
     onDecline: () -> Unit
 ) {
+    val isDark = isSystemInDarkTheme()
+    val bgColors = if (isDark) taskColorsDark else taskColorsLight
+    val cardBg = bgColors.getOrElse(task.colorIndex) { bgColors[0] }
+    val textColor = if (isDark) Color(0xFFE4E4EC) else NoteCardText
+    val subtextColor = if (isDark) Color(0xFFE4E4EC).copy(alpha = 0.7f) else NoteCardText.copy(alpha = 0.7f)
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+            containerColor = cardBg
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
@@ -702,7 +719,8 @@ fun InviteCard(
             Text(
                 text = task.title,
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
+                fontWeight = FontWeight.SemiBold,
+                color = textColor
             )
             if (task.description.isNotBlank()) {
                 Spacer(modifier = Modifier.height(4.dp))
@@ -710,14 +728,15 @@ fun InviteCard(
                     text = task.description,
                     style = MaterialTheme.typography.bodySmall,
                     maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
+                    color = subtextColor
                 )
             }
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = "Od: ${task.ownerEmail ?: task.ownerId}",
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = subtextColor
             )
             Spacer(modifier = Modifier.height(12.dp))
             Row(
@@ -725,13 +744,14 @@ fun InviteCard(
                 horizontalArrangement = Arrangement.End
             ) {
                 TextButton(onClick = onDecline) {
-                    Text("Odbij", color = MaterialTheme.colorScheme.error)
+                    Text("Odbij", color = textColor)
                 }
                 Spacer(modifier = Modifier.width(8.dp))
                 Button(
                     onClick = onAccept,
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = NoteGreenDark
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary
                     )
                 ) {
                     Text("Prihvati")

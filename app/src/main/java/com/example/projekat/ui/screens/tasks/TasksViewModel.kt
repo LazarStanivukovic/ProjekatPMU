@@ -10,6 +10,8 @@ import com.example.projekat.data.repository.ScheduleResult
 import com.example.projekat.data.repository.TaskRepository
 import com.example.projekat.location.GeofenceManager
 import com.example.projekat.notification.DeadlineScheduler
+import com.example.projekat.data.sync.SyncManager
+import com.example.projekat.data.sync.SyncState
 import com.google.firebase.auth.FirebaseAuth
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -38,7 +40,8 @@ data class TasksUiState(
     val scheduleResults: List<ScheduleResult>? = null,
     val showScheduleDialog: Boolean = false,
     val showPromptDialog: Boolean = false,
-    val pendingInvites: List<Task> = emptyList()
+    val pendingInvites: List<Task> = emptyList(),
+    val isSyncing: Boolean = false
 )
 
 @HiltViewModel
@@ -47,15 +50,17 @@ class TasksViewModel @Inject constructor(
     private val aiScheduleRepository: AiScheduleRepository,
     private val deadlineScheduler: DeadlineScheduler,
     private val geofenceManager: GeofenceManager,
-    private val auth: FirebaseAuth
+    private val auth: FirebaseAuth,
+    private val syncManager: SyncManager
 ) : ViewModel() {
 
     private val _aiState = MutableStateFlow(AiState())
 
     val uiState: StateFlow<TasksUiState> = combine(
         taskRepository.getAllTasks(),
-        _aiState
-    ) { tasks, aiState ->
+        _aiState,
+        syncManager.syncState
+    ) { tasks, aiState, syncState ->
         val currentUserEmail = auth.currentUser?.email
         val pendingInvitesList = tasks.filter { it.pendingInvites.contains(currentUserEmail) }
         val normalTasks = tasks.filter { !it.pendingInvites.contains(currentUserEmail) }
@@ -73,13 +78,20 @@ class TasksViewModel @Inject constructor(
             scheduleResults = aiState.results,
             showScheduleDialog = aiState.showDialog,
             showPromptDialog = aiState.showPromptDialog,
-            pendingInvites = pendingInvitesList
+            pendingInvites = pendingInvitesList,
+            isSyncing = syncState is SyncState.Syncing
         )
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = TasksUiState()
     )
+
+    fun swipeToRefresh() {
+        viewModelScope.launch {
+            syncManager.syncAll()
+        }
+    }
 
     fun toggleTaskStatus(task: Task) {
         viewModelScope.launch {

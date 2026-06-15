@@ -523,7 +523,6 @@ private fun CalendarTaskCard(
                     text = task.title,
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Medium,
-                    textDecoration = if (isCompleted) TextDecoration.LineThrough else null,
                     color = textColor,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
