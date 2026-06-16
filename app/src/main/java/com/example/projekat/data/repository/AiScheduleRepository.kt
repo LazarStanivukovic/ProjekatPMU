@@ -28,8 +28,7 @@ class AiScheduleRepository @Inject constructor(
                     name = task.title,
                     priority = task.priorityScore.toString(),
                     startDateTime = formatDateTime(task.startDate, task.hasTime),
-                    endDateTime = task.endDate?.let { formatDateTime(it, task.hasTime) }
-                        ?: formatDateTime(task.startDate, task.hasTime),
+                    endDateTime = task.endDate?.let { formatDateTime(it, task.hasTime) },
                     hasTime = task.hasTime
                 )
             }

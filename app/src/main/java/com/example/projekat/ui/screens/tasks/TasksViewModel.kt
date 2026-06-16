@@ -337,15 +337,11 @@ class TasksViewModel @Inject constructor(
                     )
                 }
             }.onFailure { error ->
-                val message = when {
-                    error.message?.contains("connect", ignoreCase = true) == true ->
-                        "Server nije dostupan. Proverite da li je pokrenut."
-                    error.message?.contains("timeout", ignoreCase = true) == true ->
-                        "Zahtev je istekao. Pokusajte ponovo."
-                    else -> "Greska: ${error.message ?: "Nepoznata greska"}"
-                }
                 _aiState.update {
-                    it.copy(isLoading = false, error = message)
+                    it.copy(
+                        isLoading = false,
+                        error = "Greska: ${error.message ?: "Nepoznata greska"}"
+                    )
                 }
             }
         }

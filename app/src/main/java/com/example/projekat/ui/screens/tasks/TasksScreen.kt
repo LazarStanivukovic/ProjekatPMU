@@ -51,6 +51,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -841,9 +842,6 @@ private fun AiPromptDialog(
     )
 }
 
-/**
- * Dialog showing AI-generated schedule for preview before applying.
- */
 @Composable
 private fun SchedulePreviewDialog(
     results: List<ScheduleResult>,
@@ -851,18 +849,21 @@ private fun SchedulePreviewDialog(
     onDismiss: () -> Unit
 ) {
     val dateFormat = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
+    val dateTimeFormat = SimpleDateFormat("dd MMM yyyy HH:mm", Locale.getDefault())
     val parseFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+    val parseDateTimeFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US)
     val selectedIds = remember { androidx.compose.runtime.mutableStateListOf<String>().apply { addAll(results.map { it.taskId }) } }
+    val expandedIds = remember { androidx.compose.runtime.mutableStateListOf<String>() }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(24.dp),
         icon = {
             Icon(
                 Icons.Default.AutoAwesome,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(32.dp)
+                modifier = Modifier.size(28.dp)
             )
         },
         title = {
@@ -875,108 +876,209 @@ private fun SchedulePreviewDialog(
         text = {
             Column(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text(
-                    text = "Pregled predlozenog rasporeda. Odznacite taskove koje ne zelite da primenite.",
+                    text = "Pregled predlozenog rasporeda. Dodirnite karticu da oznacite/odznacite. Prosirite za detalje.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Spacer(modifier = Modifier.height(4.dp))
 
                 results.forEach { result ->
                     val isSelected = selectedIds.contains(result.taskId)
-                    val originalDate = try {
-                        val parser = if (result.hasTime) SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US) else parseFormat
-                        val formatter = if (result.hasTime) SimpleDateFormat("dd MMM yyyy HH:mm", Locale.getDefault()) else dateFormat
-                        
-                        val start = parser.parse(result.originalStartDateTime)?.let { formatter.format(it) } ?: result.originalStartDateTime
-                        if (result.originalEndDateTime != null) {
-                            val end = parser.parse(result.originalEndDateTime)?.let { formatter.format(it) } ?: result.originalEndDateTime
-                            "$start - $end"
-                        } else start
-                    } catch (_: Exception) { result.originalStartDateTime }
+                    val isExpanded = expandedIds.contains(result.taskId)
 
-                    val scheduledDate = try {
-                        val parser = if (result.hasTime) SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US) else parseFormat
-                        val formatter = if (result.hasTime) SimpleDateFormat("dd MMM yyyy HH:mm", Locale.getDefault()) else dateFormat
-                        
-                        val start = parser.parse(result.scheduledStartDateTime)?.let { formatter.format(it) } ?: result.scheduledStartDateTime
-                        if (result.scheduledEndDateTime != null) {
-                            val end = parser.parse(result.scheduledEndDateTime)?.let { formatter.format(it) } ?: result.scheduledEndDateTime
-                            "$start - $end"
+                    fun formatDate(dateStr: String, endDateStr: String?): String = try {
+                        val parser = if (result.hasTime) parseDateTimeFormat else parseFormat
+                        val formatter = if (result.hasTime) dateTimeFormat else dateFormat
+                        val start = parser.parse(dateStr)?.let { formatter.format(it) } ?: dateStr
+                        if (endDateStr != null) {
+                            val end = parser.parse(endDateStr)?.let { formatter.format(it) } ?: endDateStr
+                            "$start — $end"
                         } else start
-                    } catch (_: Exception) { result.scheduledStartDateTime }
+                    } catch (_: Exception) { dateStr }
+
+                    val originalDate = formatDate(result.originalStartDateTime, result.originalEndDateTime)
+                    val scheduledDate = formatDate(result.scheduledStartDateTime, result.scheduledEndDateTime)
 
                     Card(
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(14.dp),
                         colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (isSelected) 1f else 0.5f)
+                            containerColor = if (isSelected)
+                                MaterialTheme.colorScheme.primaryContainer
+                            else
+                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
                         ),
-                        modifier = Modifier.clickable {
-                            if (isSelected) {
-                                selectedIds.remove(result.taskId)
-                            } else {
-                                selectedIds.add(result.taskId)
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .animateContentSize()
+                            .clickable {
+                                if (isSelected) selectedIds.remove(result.taskId)
+                                else selectedIds.add(result.taskId)
                             }
-                        }
                     ) {
-                        Row(
+                        Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                                .padding(14.dp)
                         ) {
-                            Icon(
-                                imageVector = if (isSelected) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
-                                contentDescription = null,
-                                tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column(modifier = Modifier.weight(1f)) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = if (isSelected) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
+                                    contentDescription = null,
+                                    tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
                                 Text(
                                     text = result.taskName,
                                     style = MaterialTheme.typography.titleSmall,
                                     fontWeight = FontWeight.SemiBold,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
-                                    color = if (isSelected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.weight(1f)
                                 )
-                                Spacer(modifier = Modifier.height(6.dp))
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically
+                            }
+
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            // Compact date summary (always visible)
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(
+                                            if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                                            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.08f)
+                                        )
+                                        .padding(horizontal = 8.dp, vertical = 4.dp)
                                 ) {
-                                    // Original date
                                     Text(
                                         text = originalDate,
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        textDecoration = if (isSelected) TextDecoration.LineThrough else null
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
                                     )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Icon(
-                                        Icons.AutoMirrored.Filled.ArrowForward,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(14.dp),
-                                        tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                }
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Icon(
+                                    Icons.AutoMirrored.Filled.ArrowForward,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(14.dp),
+                                    tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(
+                                            if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                                            else MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
+                                        )
+                                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                                ) {
+                                    Text(
+                                        text = scheduledDate,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.primary,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
                                     )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    // New scheduled date
+                                }
+                            }
+
+                            // Expand/collapse button
+                            TextButton(
+                                onClick = {
+                                    if (isExpanded) expandedIds.remove(result.taskId)
+                                    else expandedIds.add(result.taskId)
+                                },
+                                modifier = Modifier
+                                    .align(Alignment.End)
+                                    .padding(top = 2.dp),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = if (isExpanded) "Manje detalja" else "Vise detalja",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+
+                            // Expanded details
+                            AnimatedVisibility(visible = isExpanded) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(top = 6.dp)
+                                ) {
+                                    HorizontalDivider(
+                                        color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                                        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.12f),
+                                        thickness = 0.5.dp
+                                    )
+                                    Spacer(modifier = Modifier.height(10.dp))
+
+                                    // Original date section
+                                    Text(
+                                        text = "Trenutni datum",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
                                     Box(
                                         modifier = Modifier
-                                            .clip(RoundedCornerShape(6.dp))
-                                            .background(
-                                                if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-                                                else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.12f)
-                                            )
-                                            .padding(horizontal = 8.dp, vertical = 2.dp)
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.5f))
+                                            .padding(10.dp)
+                                    ) {
+                                        Text(
+                                            text = originalDate,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+
+                                    Spacer(modifier = Modifier.height(10.dp))
+
+                                    // New AI-scheduled date section
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            Icons.Default.AutoAwesome,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(14.dp),
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            text = "AI predlog",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.08f))
+                                            .padding(10.dp)
                                     ) {
                                         Text(
                                             text = scheduledDate,
-                                            style = MaterialTheme.typography.bodySmall,
+                                            style = MaterialTheme.typography.bodyMedium,
                                             fontWeight = FontWeight.SemiBold,
-                                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                            color = MaterialTheme.colorScheme.primary
                                         )
                                     }
                                 }
