@@ -11,9 +11,14 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import com.example.projekat.data.repository.AuthRepository
+import com.example.projekat.notification.SharedTaskListener
 import com.example.projekat.worker.CleanupWorker
 import com.example.projekat.worker.SyncWorker
 import dagger.hilt.android.HiltAndroidApp
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 
@@ -22,6 +27,12 @@ class ProjekatApplication : Application(), Configuration.Provider {
 
     @Inject
     lateinit var workerFactory: HiltWorkerFactory
+
+    @Inject
+    lateinit var authRepository: AuthRepository
+
+    @Inject
+    lateinit var sharedTaskListener: SharedTaskListener
 
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
@@ -33,6 +44,19 @@ class ProjekatApplication : Application(), Configuration.Provider {
         createNotificationChannel()
         scheduleCleanupWorker()
         scheduleSyncWorker()
+        observeAuthState()
+    }
+
+    private fun observeAuthState() {
+        CoroutineScope(Dispatchers.IO).launch {
+            authRepository.observeAuthState().collect { user ->
+                if (user != null) {
+                    sharedTaskListener.startListening()
+                } else {
+                    sharedTaskListener.stopListening()
+                }
+            }
+        }
     }
 
     private fun createNotificationChannel() {
@@ -55,9 +79,19 @@ class ProjekatApplication : Application(), Configuration.Provider {
                 description = "Obavestenja kada se priblizite lokaciji za task"
             }
 
+            // Inbox notifications channel
+            val inboxChannel = NotificationChannel(
+                INBOX_CHANNEL_ID,
+                "Inbox obaveštenja",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Obaveštenja kada dobijete novi zadatak u Inboxu"
+            }
+
             val notificationManager = getSystemService(NotificationManager::class.java)
             notificationManager.createNotificationChannel(deadlineChannel)
             notificationManager.createNotificationChannel(locationChannel)
+            notificationManager.createNotificationChannel(inboxChannel)
         }
     }
 
@@ -98,5 +132,6 @@ class ProjekatApplication : Application(), Configuration.Provider {
     companion object {
         const val DEADLINE_CHANNEL_ID = "deadline_notifications"
         const val LOCATION_CHANNEL_ID = "location_notifications"
+        const val INBOX_CHANNEL_ID = "inbox_notifications"
     }
 }

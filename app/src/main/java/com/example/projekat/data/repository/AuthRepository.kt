@@ -2,6 +2,9 @@ package com.example.projekat.data.repository
 
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.SetOptions
+import com.google.firebase.messaging.FirebaseMessaging
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -22,7 +25,8 @@ sealed class AuthResult {
  */
 @Singleton
 class AuthRepository @Inject constructor(
-    private val auth: FirebaseAuth
+    private val auth: FirebaseAuth,
+    private val firestore: FirebaseFirestore
 ) {
     /** Current authenticated user or null */
     val currentUser: FirebaseUser?
@@ -86,6 +90,14 @@ class AuthRepository @Inject constructor(
         } catch (e: Exception) {
             Result.failure(Exception(mapFirebaseError(e)))
         }
+    }
+
+    suspend fun saveFcmToken() {
+        val uid = auth.currentUser?.uid ?: return
+        val token = FirebaseMessaging.getInstance().token.await()
+        firestore.collection("users").document(uid)
+            .set(mapOf("fcmToken" to token, "email" to auth.currentUser?.email), SetOptions.merge())
+            .await()
     }
 
     /**

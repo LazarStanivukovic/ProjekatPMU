@@ -45,6 +45,9 @@ class AuthViewModel @Inject constructor(
                     isAuthenticated = user != null,
                     user = user
                 )
+                if (user != null) {
+                    authRepository.saveFcmToken()
+                }
             }
         }
     }
@@ -84,6 +87,7 @@ class AuthViewModel @Inject constructor(
 
             when (val result = authRepository.login(emailValue, passwordValue)) {
                 is AuthResult.Success -> {
+                    authRepository.saveFcmToken()
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         isAuthenticated = true,
@@ -129,6 +133,7 @@ class AuthViewModel @Inject constructor(
 
             when (val result = authRepository.register(emailValue, passwordValue)) {
                 is AuthResult.Success -> {
+                    authRepository.saveFcmToken()
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         isAuthenticated = true,

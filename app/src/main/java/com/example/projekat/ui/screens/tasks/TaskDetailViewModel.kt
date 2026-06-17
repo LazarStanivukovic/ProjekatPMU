@@ -9,6 +9,7 @@ import com.example.projekat.data.model.Note
 import com.example.projekat.data.model.RepeatInterval
 import com.example.projekat.data.model.Task
 import com.example.projekat.data.model.TaskStatus
+import com.example.projekat.data.repository.CloudTaskRepository
 import com.example.projekat.data.repository.NoteRepository
 import com.example.projekat.data.repository.TaskRepository
 import com.example.projekat.location.GeofenceManager
@@ -61,6 +62,7 @@ class TaskDetailViewModel @Inject constructor(
     private val noteRepository: NoteRepository,
     private val deadlineScheduler: DeadlineScheduler,
     private val geofenceManager: GeofenceManager,
+    private val cloudTaskRepository: CloudTaskRepository,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -583,7 +585,13 @@ class TaskDetailViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(
                 pendingInvites = currentPending + email
             )
-            scheduleAutoSave()
+            autoSaveJob?.cancel()
+            viewModelScope.launch {
+                performSave()
+                val taskId = persistedTaskId ?: return@launch
+                val task = taskRepository.getTaskById(taskId) ?: return@launch
+                cloudTaskRepository.uploadTask(task)
+            }
         }
     }
 }

@@ -55,6 +55,15 @@
                 tools:node="remove" />
         </provider>
 
+        <!-- FCM service for push notifications -->
+        <service
+            android:name=".notification.FcmService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT"/>
+            </intent-filter>
+        </service>
+
         <!-- Geofence broadcast receiver for location-based notifications -->
         <receiver
             android:name=".location.GeofenceBroadcastReceiver"

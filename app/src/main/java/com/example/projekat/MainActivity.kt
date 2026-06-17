@@ -32,6 +32,9 @@ class MainActivity : ComponentActivity() {
     // Pending taskId from notification tap — consumed by Compose navigation
     private var pendingTaskId by mutableStateOf<String?>(null)
 
+    // Navigate to Inbox when notification is tapped (shared task notification)
+    private var openInbox by mutableStateOf(false)
+
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { /* User granted or denied — nothing extra needed */ }
@@ -54,6 +57,18 @@ class MainActivity : ComponentActivity() {
                             launchSingleTop = true
                         }
                         pendingTaskId = null
+                    }
+                }
+
+                // Navigate to Tasks tab (Inbox) when inbox notification is tapped
+                LaunchedEffect(openInbox) {
+                    if (openInbox) {
+                        navController.navigate(Screen.Tasks.route) {
+                            popUpTo(Screen.Notes.route) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                        openInbox = false
                     }
                 }
 
@@ -104,6 +119,9 @@ class MainActivity : ComponentActivity() {
     private fun handleTaskIdFromIntent(intent: Intent?) {
         intent?.getStringExtra("taskId")?.let { taskId ->
             pendingTaskId = taskId
+        }
+        if (intent?.getBooleanExtra("openInbox", false) == true) {
+            openInbox = true
         }
     }
 
