@@ -9,11 +9,13 @@ import com.example.projekat.data.model.Note
 import com.example.projekat.data.model.RepeatInterval
 import com.example.projekat.data.model.Task
 import com.example.projekat.data.model.TaskStatus
+import com.example.projekat.data.repository.AuthRepository
 import com.example.projekat.data.repository.CloudTaskRepository
 import com.example.projekat.data.repository.NoteRepository
 import com.example.projekat.data.repository.TaskRepository
 import com.example.projekat.location.GeofenceManager
 import com.example.projekat.notification.DeadlineScheduler
+import com.example.projekat.notification.FcmNotificationSender
 import com.example.projekat.ui.components.LocationData
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -63,6 +65,8 @@ class TaskDetailViewModel @Inject constructor(
     private val deadlineScheduler: DeadlineScheduler,
     private val geofenceManager: GeofenceManager,
     private val cloudTaskRepository: CloudTaskRepository,
+    private val fcmNotificationSender: FcmNotificationSender,
+    private val authRepository: AuthRepository,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -591,6 +595,12 @@ class TaskDetailViewModel @Inject constructor(
                 val taskId = persistedTaskId ?: return@launch
                 val task = taskRepository.getTaskById(taskId) ?: return@launch
                 cloudTaskRepository.uploadTask(task)
+                fcmNotificationSender.notifyTaskShared(
+                    recipientEmail = email,
+                    taskTitle = task.title,
+                    senderEmail = authRepository.currentUser?.email ?: "",
+                    taskId = taskId
+                )
             }
         }
     }
