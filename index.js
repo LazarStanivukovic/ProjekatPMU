@@ -1,21 +1,51 @@
 const express = require("express");
 const admin = require("firebase-admin");
+const fs = require("fs");
 
-let serviceAccount;
+let serviceAccount = null;
 if (process.env.SERVICE_ACCOUNT_JSON) {
-  serviceAccount = JSON.parse(process.env.SERVICE_ACCOUNT_JSON);
+  try {
+    serviceAccount = JSON.parse(process.env.SERVICE_ACCOUNT_JSON);
+    console.log("Loaded service account from SERVICE_ACCOUNT_JSON env var");
+  } catch (e) {
+    console.error("Failed to parse SERVICE_ACCOUNT_JSON env var:", e.message);
+    console.log("First 100 chars of env var:", process.env.SERVICE_ACCOUNT_JSON.substring(0, 100));
+  }
 } else {
-  serviceAccount = require("./service_account.json");
+  console.log("SERVICE_ACCOUNT_JSON env var not set");
 }
 
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
-});
+// Fallback: try reading service_account.json from disk
+if (!serviceAccount) {
+  try {
+    if (fs.existsSync("./service_account.json")) {
+      serviceAccount = JSON.parse(fs.readFileSync("./service_account.json", "utf8"));
+      console.log("Loaded service account from service_account.json file");
+    }
+  } catch (e) {
+    console.error("Failed to read service_account.json:", e.message);
+  }
+}
+
+if (serviceAccount) {
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount),
+  });
+  console.log("Firebase Admin initialized");
+} else {
+  console.error("WARNING: No service account found. /sendNotification will fail.");
+  admin.initializeApp();
+}
 
 const app = express();
 app.use(express.json());
 
 app.post("/sendNotification", async (req, res) => {
+  if (!serviceAccount) {
+    res.status(500).json({success: false, error: "Server not configured - no service account"});
+    return;
+  }
+
   const {recipientEmail, taskTitle, senderEmail, taskId} = req.body;
   if (!recipientEmail || !taskTitle || !senderEmail || !taskId) {
     res.status(400).json({success: false, error: "Missing required fields"});
@@ -63,7 +93,10 @@ app.post("/sendNotification", async (req, res) => {
 });
 
 app.get("/health", (req, res) => {
-  res.json({status: "ok"});
+  res.json({
+    status: "ok",
+    configured: !!serviceAccount,
+  });
 });
 
 const PORT = process.env.PORT || 3000;
