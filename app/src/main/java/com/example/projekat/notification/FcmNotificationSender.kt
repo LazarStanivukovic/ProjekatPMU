@@ -16,7 +16,7 @@ class FcmNotificationSender @Inject constructor() {
     private val client = OkHttpClient()
 
     // Change this to your Railway URL after deployment
-    private val functionUrl = "https://projekatpmu-production.up.railway.app"
+    private val functionUrl = "https://projekatpmu-production.up.railway.app/sendNotification"
 
     suspend fun notifyTaskShared(
         recipientEmail: String,
