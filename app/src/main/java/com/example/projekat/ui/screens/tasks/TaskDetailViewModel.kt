@@ -144,6 +144,28 @@ class TaskDetailViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(availableNotes = notes)
     }
 
+    fun refreshShareState() {
+        val taskId = persistedTaskId ?: return
+        viewModelScope.launch {
+            val result = cloudTaskRepository.fetchSharedTask(taskId)
+            result.onSuccess { cloudTask ->
+                if (cloudTask != null) {
+                    _uiState.value = _uiState.value.copy(
+                        sharedWith = cloudTask.sharedWith,
+                        pendingInvites = cloudTask.pendingInvites
+                    )
+                    val currentTask = taskRepository.getTaskById(taskId)
+                    if (currentTask != null) {
+                        taskRepository.updateTask(currentTask.copy(
+                            sharedWith = cloudTask.sharedWith,
+                            pendingInvites = cloudTask.pendingInvites
+                        ))
+                    }
+                }
+            }
+        }
+    }
+
     fun updateTitle(title: String) {
         _uiState.value = _uiState.value.copy(title = title)
         scheduleAutoSave()

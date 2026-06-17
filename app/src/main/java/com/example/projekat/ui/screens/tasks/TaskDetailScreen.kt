@@ -325,6 +325,9 @@ fun TaskDetailScreen(
     }
 
     if (showShareDialog) {
+        LaunchedEffect(showShareDialog) {
+            viewModel.refreshShareState()
+        }
         androidx.compose.material3.AlertDialog(
             onDismissRequest = {
                 showShareDialog = false

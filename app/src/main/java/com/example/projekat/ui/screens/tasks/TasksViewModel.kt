@@ -6,6 +6,7 @@ import com.example.projekat.data.model.RepeatInterval
 import com.example.projekat.data.model.Task
 import com.example.projekat.data.model.TaskStatus
 import com.example.projekat.data.repository.AiScheduleRepository
+import com.example.projekat.data.repository.CloudTaskRepository
 import com.example.projekat.data.repository.ScheduleResult
 import com.example.projekat.data.repository.TaskRepository
 import com.example.projekat.location.GeofenceManager
@@ -47,6 +48,7 @@ data class TasksUiState(
 @HiltViewModel
 class TasksViewModel @Inject constructor(
     private val taskRepository: TaskRepository,
+    private val cloudTaskRepository: CloudTaskRepository,
     private val aiScheduleRepository: AiScheduleRepository,
     private val deadlineScheduler: DeadlineScheduler,
     private val geofenceManager: GeofenceManager,
@@ -231,9 +233,8 @@ class TasksViewModel @Inject constructor(
             val updatedTask = task.copy(
                 pendingInvites = updatedPending
             )
-            // If the user declines, they just remove themselves from pendingInvites.
-            // If they are not owner or sharedWith, they will no longer fetch this task from Cloud.
-            taskRepository.updateTask(updatedTask)
+            cloudTaskRepository.uploadTask(updatedTask)
+            taskRepository.deleteTaskFromDevice(updatedTask)
         }
     }
 

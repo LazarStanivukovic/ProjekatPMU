@@ -62,6 +62,10 @@ class TaskRepository @Inject constructor(
         }
     }
 
+    suspend fun deleteTaskFromDevice(task: Task) {
+        taskDao.deleteTask(task)
+    }
+
     suspend fun deleteTaskById(taskId: String) {
         val task = taskDao.getTaskById(taskId)
         if (task != null) {

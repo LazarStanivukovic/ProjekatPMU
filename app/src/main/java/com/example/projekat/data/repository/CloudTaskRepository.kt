@@ -110,6 +110,23 @@ class CloudTaskRepository @Inject constructor(
     }
 
     /**
+     * Fetch a single shared task from Firestore by ID (from shared_tasks collection).
+     */
+    suspend fun fetchSharedTask(taskId: String): Result<Task?> {
+        return try {
+            val doc = rootTasksCollection.document(taskId).get().await()
+            if (!doc.exists()) {
+                Result.success(null)
+            } else {
+                val task = documentToTask(doc.data!!, doc.id)
+                Result.success(task)
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
      * Fetch all tasks from Firestore (owned by user OR shared with user OR pending invite).
      */
     suspend fun fetchAllTasks(): Result<List<Task>> {
